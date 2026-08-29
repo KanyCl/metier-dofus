@@ -21,7 +21,7 @@
     <!-- ===================== ONGLETS ===================== -->
     <nav class="onglets">
         <button class="onglet actif" data-onglet="plan">📋 Feuille de route</button>
-        <button class="onglet" data-onglet="recolte">🌾 Récolte &amp; trajets</button>
+        <button class="onglet" data-onglet="recolte">🌾 Que récolter</button>
         <button class="onglet" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
     </nav>
 
@@ -121,10 +121,11 @@
     <section id="vue-recolte" class="vue" hidden>
 
         <div class="bloc">
-            <h2>🌾 Que récolter, et où ?</h2>
+            <h2>🌾 Que récolter à mon niveau ?</h2>
             <p class="explication">
-                Choisis un métier de récolte et ta tranche de niveau : l'outil interroge
-                DofusDB pour lister les ressources récoltables à ce palier.
+                Choisis un métier de récolte et ta tranche de niveau. Les ressources sont
+                classées de la plus haute à la plus basse : <strong>la première est celle
+                qui rapporte le plus d'XP</strong>. Données fournies par DofusDB.
             </p>
             <div class="barre-outils">
                 <div class="champ">
@@ -140,43 +141,15 @@
             </div>
             <div id="diagRecolte" class="diagnostic"></div>
             <div id="listeRessources"></div>
+            <p class="petite-note">
+                🗺️ Pour savoir <em>où</em> les récolter :
+                <a href="https://dofus-map.com/" target="_blank" rel="noopener">dofus-map.com</a>
+                recense les ressources map par map — cette donnée est construite par les
+                joueurs et n'existe dans aucune base ouverte, elle ne peut donc pas être
+                intégrée ici.
+            </p>
         </div>
 
-        <div class="bloc">
-            <h2>🗺️ Mon trajet de récolte</h2>
-            <p class="explication">
-                L'outil calcule <strong>tout seul l'ordre le plus court</strong> pour passer
-                par toutes les maps. Il tente d'abord de les récupérer depuis DofusDB
-                (bouton 🔍 sur chaque ressource ci-dessus).
-            </p>
-            <p class="avertissement">
-                ⚠️ Le lien « telle ressource sur telle map » n'existe dans aucune base ouverte :
-                il n'est présent que dans les fichiers du jeu. Si la recherche automatique
-                échoue, colle les coordonnées ci-dessous — je ne les invente pas, car un
-                trajet inventé te ferait tourner en rond.
-            </p>
-            <p>
-                <a href="https://dofusdb.fr/fr/tools/map" target="_blank" rel="noopener">
-                    Ouvrir la carte interactive DofusDB ↗</a>
-                <span class="petite-note">
-                    (active les objets récoltables dans la barre latérale)
-                </span>
-            </p>
-
-            <div class="collage">
-                <label for="collageMaps">Coller des coordonnées (d'un coup)</label>
-                <textarea id="collageMaps" rows="3"
-                    placeholder="-2,13   3,-5   [1,4]   7;-2 …  (peu importe le séparateur)"></textarea>
-                <div class="actions-collage">
-                    <button id="ajouterCollage" class="bouton-craft">+ Ajouter ces maps</button>
-                    <button id="optimiserBouton" class="bouton-secondaire">🧭 Calculer le trajet le plus court</button>
-                    <button id="viderTrajet" class="bouton-secondaire">Vider le trajet</button>
-                </div>
-            </div>
-
-            <div id="listeTrajet"></div>
-            <p class="petite-note" id="resumeTrajet"></p>
-        </div>
     </section>
 
     <!-- ============================================================

@@ -717,16 +717,10 @@ function brancherPlan() {
 
 
 /* ============================================================
-   10) RÉCOLTE & TRAJETS
+   10) QUE RÉCOLTER
    ============================================================ */
 
-// Trajets enregistrés : { "jobId|min-max": [ {x, y, note}, … ] }
-const trajets = chargerJSON("dofus_trajets", {});
 let ressourcesCourantes = [];   // les compétences de récolte du métier choisi
-
-function cleTrajet() {
-    return $("metierRecolte").value + "|" + $("trancheRecolte").value;
-}
 
 // Remplit les menus de l'onglet Récolte à partir des métiers déjà chargés.
 // Enlève les accents et la casse : « Bûcheron » et « bucheron »
@@ -806,7 +800,6 @@ async function chargerRessources() {
     // On ne garde que les compétences qui récoltent vraiment une ressource.
     ressourcesCourantes = brut.map((sk) => ({
         idRessource: premierChamp(sk, CHAMP_RESSOURCE),
-        idInteractif: premierChamp(sk, CHAMP_INTERACTIF),
         niveau: premierChamp(sk, CHAMP_NIVEAU) || 0
     })).filter((r) => r.idRessource != null);
 
@@ -855,154 +848,15 @@ function afficherRessources() {
                             ${meilleure ? ` · <span class="marque-top">meilleure XP ici</span>` : ""}
                         </div>
                     </div>
-                    ${r.idInteractif != null
-                        ? `<button class="bouton-mini" data-maps="${r.idInteractif}"
-                                   title="Chercher les maps de cette ressource">🔍</button>`
-                        : ""}
                 </div>`;
             }).join("")}
         </div>`;
 }
 
-// Tente de retrouver automatiquement les maps d'une ressource.
-async function chercherMaps(idInteractif) {
-    const diag = $("diagRecolte");
-    diag.innerHTML = "Recherche des maps…";
-
-    for (const piste of PISTES_MAPS) {
-        try {
-            const data = await appelAPI(piste.url(idInteractif));
-            const liste = data.data || (Array.isArray(data) ? data : null);
-            if (!liste || !liste.length) continue;
-
-            // On ne retient que les entrées qui portent vraiment des coordonnées.
-            const maps = liste
-                .map((m) => ({
-                    x: premierChamp(m, ["posX", "x"]),
-                    y: premierChamp(m, ["posY", "y"]),
-                    note: ""
-                }))
-                .filter((m) => m.x != null && m.y != null);
-
-            if (maps.length) {
-                const cle = cleTrajet();
-                trajets[cle] = optimiserTrajet(maps);
-                sauverJSON("dofus_trajets", trajets);
-                afficherTrajet();
-                diag.innerHTML = `<span class="diag-ok">
-                    ✅ ${maps.length} maps trouvées automatiquement et ordonnées.</span>`;
-                return;
-            }
-        } catch (e) { /* piste suivante */ }
-    }
-
-    diag.innerHTML = `<span class="diag-echec">
-        DofusDB n'expose pas les maps de cette ressource. Repère-les sur la carte
-        interactive et colle les coordonnées plus bas : l'ordre sera calculé pour toi.</span>`;
-}
-
-/* ---------- Le trajet ---------- */
-
-function afficherTrajet() {
-    const zone = $("listeTrajet");
-
-    if (!$("metierRecolte").value) {
-        zone.innerHTML = `<p class="petite-note">Choisis d'abord un métier ci-dessus.</p>`;
-        $("resumeTrajet").textContent = "";
-        return;
-    }
-
-    const etapes = trajets[cleTrajet()] || [];
-    if (!etapes.length) {
-        zone.innerHTML = `<p class="petite-note">
-            Aucune map pour ce métier et cette tranche. Colle des coordonnées ci-dessus.</p>`;
-        $("resumeTrajet").textContent = "";
-        return;
-    }
-
-    zone.innerHTML = etapes.map((e, i) => `
-        <div class="etape-trajet">
-            <span class="numero-etape">${i + 1}</span>
-            <span class="coord">[${e.x} , ${e.y}]</span>
-            <span class="note-trajet">${e.note || ""}</span>
-            <span class="actions-trajet">
-                <button class="bouton-mini bouton-suppr" data-supprimer="${i}">✕</button>
-            </span>
-        </div>`).join("");
-
-    $("resumeTrajet").textContent =
-        `${etapes.length} map${etapes.length > 1 ? "s" : ""} · ` +
-        `${longueurTrajet(etapes)} changements de map pour boucler le circuit, ` +
-        `puis on recommence.`;
-}
-
 function brancherRecolte() {
     preparerTranches();
-    $("metierRecolte").addEventListener("change", () => { chargerRessources(); afficherTrajet(); });
-    $("trancheRecolte").addEventListener("change", () => { afficherRessources(); afficherTrajet(); });
-
-    // Bouton 🔍 sur une ressource
-    $("listeRessources").addEventListener("click", (e) => {
-        const b = e.target.closest("[data-maps]");
-        if (b) chercherMaps(b.dataset.maps);
-    });
-
-    // Ajouter des maps collées en bloc
-    $("ajouterCollage").addEventListener("click", () => {
-        if (!$("metierRecolte").value) {
-            alert("Choisis d'abord un métier de récolte.");
-            return;
-        }
-        const nouvelles = lireCoordonnees($("collageMaps").value);
-        if (!nouvelles.length) {
-            alert("Aucune coordonnée reconnue. Exemple attendu : -2,13   3,-5");
-            return;
-        }
-        const cle = cleTrajet();
-        if (!trajets[cle]) trajets[cle] = [];
-        trajets[cle] = optimiserTrajet(trajets[cle].concat(nouvelles));
-        sauverJSON("dofus_trajets", trajets);
-        $("collageMaps").value = "";
-        afficherTrajet();
-    });
-
-    // Recalculer l'ordre optimal
-    $("optimiserBouton").addEventListener("click", () => {
-        const cle = cleTrajet();
-        const etapes = trajets[cle];
-        if (!etapes || etapes.length < 3) {
-            alert("Ajoute au moins trois maps pour qu'un ordre optimal ait du sens.");
-            return;
-        }
-        const avant = longueurTrajet(etapes);
-        trajets[cle] = optimiserTrajet(etapes);
-        const apres = longueurTrajet(trajets[cle]);
-        sauverJSON("dofus_trajets", trajets);
-        afficherTrajet();
-        $("resumeTrajet").textContent +=
-            avant > apres ? ` (raccourci de ${avant - apres} déplacements)` : " (déjà optimal)";
-    });
-
-    // Vider
-    $("viderTrajet").addEventListener("click", () => {
-        if (!confirm("Effacer toutes les maps de ce trajet ?")) return;
-        delete trajets[cleTrajet()];
-        sauverJSON("dofus_trajets", trajets);
-        afficherTrajet();
-    });
-
-    // Supprimer une map
-    $("listeTrajet").addEventListener("click", (e) => {
-        const b = e.target.closest("[data-supprimer]");
-        if (!b) return;
-        const etapes = trajets[cleTrajet()];
-        if (!etapes) return;
-        etapes.splice(Number(b.dataset.supprimer), 1);
-        sauverJSON("dofus_trajets", trajets);
-        afficherTrajet();
-    });
-
-    afficherTrajet();
+    $("metierRecolte").addEventListener("change", chargerRessources);
+    $("trancheRecolte").addEventListener("change", afficherRessources);
 }
 
 
