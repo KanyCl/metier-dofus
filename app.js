@@ -123,7 +123,7 @@ async function chargerMetiers() {
             opt.textContent = loc(m.name);
             select.appendChild(opt);
         }
-        preparerRecolte(vrais);
+        preparerRecolte(metiers);
         statut("✅ Connecté à DofusDB (" + vrais.length + " métiers)", "ok");
     } catch (e) {
         console.error(e);
@@ -729,12 +729,26 @@ function cleTrajet() {
 }
 
 // Remplit les menus de l'onglet Récolte à partir des métiers déjà chargés.
+// Enlève les accents et la casse : « Bûcheron » et « bucheron »
+// deviennent le même mot, ce qui évite de rater un métier.
+function sansAccent(texte) {
+    return (texte || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+}
+
 function preparerRecolte(metiers) {
-    const recolte = metiers.filter((m) =>
-        METIERS_RECOLTE.some((nom) =>
-            loc(m.name).toLowerCase().startsWith(nom.toLowerCase().slice(0, 5))
-        )
-    );
+    let recolte = metiers.filter((m) => {
+        const nom = sansAccent(loc(m.name));
+        return METIERS_RECOLTE.some((connu) => nom.includes(sansAccent(connu)));
+    });
+
+    // Si aucun nom ne correspond (renommage côté API, autre langue…),
+    // mieux vaut proposer tous les métiers qu'une liste vide.
+    let repli = false;
+    if (!recolte.length) { recolte = metiers; repli = true; }
 
     const selM = $("metierRecolte");
     for (const m of recolte) {
@@ -744,6 +758,15 @@ function preparerRecolte(metiers) {
         selM.appendChild(opt);
     }
 
+    if (repli) {
+        $("diagRecolte").innerHTML = `<span class="diag-echec">
+            Je n'ai pas reconnu les métiers de récolte par leur nom : tous les métiers
+            sont proposés ci-dessus.</span>`;
+    }
+}
+
+// Les tranches ne dépendent pas du réseau : on les remplit tout de suite.
+function preparerTranches() {
     $("trancheRecolte").innerHTML = TRANCHES.map(
         (t) => `<option value="${t.min}-${t.max}">Niveau ${t.min} à ${t.max}</option>`
     ).join("");
@@ -914,6 +937,7 @@ function afficherTrajet() {
 }
 
 function brancherRecolte() {
+    preparerTranches();
     $("metierRecolte").addEventListener("change", () => { chargerRessources(); afficherTrajet(); });
     $("trancheRecolte").addEventListener("change", () => { afficherRessources(); afficherTrajet(); });
 
