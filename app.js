@@ -252,10 +252,10 @@ function afficherRecettes() {
     liste.sort((a, b) => {
         if (tri === "profit") return b.profit - a.profit;
         if (tri === "cout")   return a.cout - b.cout;
-        // par défaut : par niveau de l'objet
-        const na = a.objet.niveau || a.recette.resultLevel || 0;
-        const nb = b.objet.niveau || b.recette.resultLevel || 0;
-        return na - nb;
+        // Tri par niveau de l'objet : croissant (du + bas au + haut)
+        // ou décroissant (du + haut au + bas).
+        const ecart = niveauDe(a) - niveauDe(b);
+        return tri === "niveau-desc" ? -ecart : ecart;
     });
 
     // Statistiques
