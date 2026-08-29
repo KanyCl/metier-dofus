@@ -12,8 +12,9 @@ Les recettes sont récupérées **en direct** depuis l'API publique de
 - **Recettes en direct** — choisis un métier, l'outil liste ses crafts (objet, niveau, ingrédients).
 - **Rentabilité** — saisis le prix des ingrédients et le prix de vente : coût de craft, profit et marge
   sont calculés automatiquement. Les prix forment un « carnet » réutilisé partout.
-- **Mode « monter le métier »** — ne garde que les recettes proches de mon niveau (bonnes pour l'XP),
-  triables par niveau, profit ou coût.
+- **Filtre par niveau** — par défaut, seuls les crafts **réalisables à mon niveau** sont affichés.
+  Deux autres choix : « les meilleurs pour l'XP » (les plus proches de mon niveau) ou
+  « tous les crafts du métier ».
 - **Synergies entre métiers** — pour chaque ingrédient, vérifie s'il est lui-même craftable et par quel métier.
 - **Suivi des bénéfices** — bouton « j'ai crafté » qui cumule le profit total et le nombre de crafts.
 - **Section Huzounet** — lien vers [Huzounet.fr](https://huzounet.fr/) pour repérer les équipements

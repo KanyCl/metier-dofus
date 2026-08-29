@@ -83,6 +83,16 @@ function statut(texte, type) {
    2) CHARGEMENT DES MÉTIERS
    ============================================================ */
 
+// Combien de recettes ce métier possède-t-il ? ($limit=0 : on ne veut que le total)
+async function compterRecettes(jobId) {
+    try {
+        const data = await appelAPI("/recipes?jobId=" + jobId + "&$limit=0");
+        return data.total ?? 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
 async function chargerMetiers() {
     statut("Connexion à DofusDB…", "attente");
     try {
@@ -92,14 +102,28 @@ async function chargerMetiers() {
             .filter((m) => m && m.id != null)
             .sort((a, b) => loc(a.name).localeCompare(loc(b.name)));
 
+        // L'API liste aussi des entrées internes qui ne sont pas de vrais
+        // métiers de craft (« Base », « Bestiologue »…). Plutôt que de les
+        // bloquer par leur nom, on ne garde que les métiers qui possèdent
+        // réellement au moins une recette.
+        statut("Vérification des métiers…", "attente");
+        const compteurs = await Promise.all(
+            metiers.map((m) => compterRecettes(m.id))
+        );
+        let vrais = metiers.filter((m, i) => compteurs[i] > 0);
+
+        // Sécurité : si la vérification échoue (réseau capricieux), on
+        // préfère afficher tous les métiers plutôt qu'une liste vide.
+        if (vrais.length === 0) vrais = metiers;
+
         const select = $("selectMetier");
-        for (const m of metiers) {
+        for (const m of vrais) {
             const opt = document.createElement("option");
             opt.value = m.id;
             opt.textContent = loc(m.name);
             select.appendChild(opt);
         }
-        statut("✅ Connecté à DofusDB (" + metiers.length + " métiers)", "ok");
+        statut("✅ Connecté à DofusDB (" + vrais.length + " métiers)", "ok");
     } catch (e) {
         console.error(e);
         statut("❌ Impossible de joindre DofusDB. Ouvre ce fichier dans un navigateur avec accès Internet, puis recharge la page.", "erreur");
@@ -183,12 +207,17 @@ async function chargerObjets(ids) {
    4) AFFICHAGE DES RECETTES
    ============================================================ */
 
+// Niveau d'un objet (celui de l'objet, sinon celui indiqué par la recette).
+function niveauDe(x) {
+    return x.objet.niveau || x.recette.resultLevel || 0;
+}
+
 function afficherRecettes() {
     const conteneur = $("listeRecettes");
     conteneur.innerHTML = "";
 
     const monNiveau = parseInt($("niveauMetier").value) || 1;
-    const modeMontee = $("modeMontee").checked;
+    const filtreNiveau = $("filtreNiveau").value;
     const recherche = $("recherche").value.trim().toLowerCase();
     const tri = $("triRentabilite").value;
 
@@ -204,15 +233,20 @@ function afficherRecettes() {
         liste = liste.filter((x) => x.objet.nom.toLowerCase().includes(recherche));
     }
 
-    // Mode « monter le métier » : on ne garde que les recettes utiles pour l'XP,
-    // c'est-à-dire dont le niveau de l'objet est dans une fenêtre autour du mien.
-    // (Heuristique communautaire : crafter des objets proches de son niveau de métier.)
-    if (modeMontee) {
+    // Filtre par niveau. Le niveau de l'objet sert de niveau de métier requis
+    // pour le crafter : un objet niveau 60 demande un métier niveau 60.
+    if (filtreNiveau === "realisables") {
+        // Uniquement ce que je peux crafter maintenant.
+        liste = liste.filter((x) => niveauDe(x) <= monNiveau);
+    } else if (filtreNiveau === "xp") {
+        // Les crafts réalisables les plus proches de mon niveau : ce sont eux
+        // qui rapportent le plus d'XP (un objet très bas niveau n'en donne plus).
         liste = liste.filter((x) => {
-            const nivObjet = x.objet.niveau || x.recette.resultLevel || 0;
-            return nivObjet <= monNiveau + 10 && nivObjet >= monNiveau - 30;
+            const niv = niveauDe(x);
+            return niv <= monNiveau && niv >= monNiveau - 30;
         });
     }
+    // "tous" : on n'enlève rien.
 
     // Tri
     liste.sort((a, b) => {
@@ -230,9 +264,12 @@ function afficherRecettes() {
         metierCourantNom ? "recettes de " + metierCourantNom : "recettes chargées";
     $("messageVide").style.display = liste.length ? "none" : "block";
     if (!liste.length) {
-        $("messageVide").textContent = metierCourantNom
-            ? "Aucune recette de " + metierCourantNom + " ne correspond à ces filtres."
-            : "Aucune recette ne correspond à ces filtres.";
+        const nom = metierCourantNom || "ce métier";
+        $("messageVide").textContent =
+            $("filtreNiveau").value === "tous"
+                ? "Aucune recette de " + nom + " ne correspond à cette recherche."
+                : "Aucun craft de " + nom + " réalisable au niveau " + monNiveau +
+                  ". Monte ton niveau, ou choisis « Tous les crafts du métier » pour voir la suite.";
     }
 
     // Création des cartes
@@ -259,7 +296,8 @@ function calculerRentabilite(recette) {
 function creerCarteRecette(x, monNiveau) {
     const { recette, objet } = x;
     const nivObjet = objet.niveau || recette.resultLevel || 0;
-    const dansFenetre = nivObjet <= monNiveau + 10 && nivObjet >= monNiveau - 30;
+    // Réalisable à mon niveau ET assez proche de lui pour rapporter de l'XP.
+    const dansFenetre = nivObjet <= monNiveau && nivObjet >= monNiveau - 30;
 
     const carte = document.createElement("div");
     carte.className = "carte-recette" + (dansFenetre ? " dans-fenetre" : "");
@@ -415,7 +453,7 @@ function brancherEvenements() {
 
     // Les filtres réaffichent sans recharger l'API
     $("niveauMetier").addEventListener("input", afficherRecettes);
-    $("modeMontee").addEventListener("change", afficherRecettes);
+    $("filtreNiveau").addEventListener("change", afficherRecettes);
     $("triRentabilite").addEventListener("change", afficherRecettes);
 
     // Recherche : on attend un court instant pour ne pas rafraîchir à chaque touche

@@ -38,12 +38,14 @@
             <input type="text" id="recherche" placeholder="ex : épée, ceinture…">
         </div>
 
-        <div class="champ champ-case">
-            <label>
-                <input type="checkbox" id="modeMontee">
-                Mode « monter le métier »
-            </label>
-            <small>Ne garde que les recettes proches de mon niveau, triées pour l'XP.</small>
+        <div class="champ">
+            <label for="filtreNiveau">Afficher</label>
+            <select id="filtreNiveau">
+                <option value="realisables">Crafts de mon niveau</option>
+                <option value="xp">Les meilleurs pour l'XP</option>
+                <option value="tous">Tous les crafts du métier</option>
+            </select>
+            <small>« Crafts de mon niveau » masque les objets trop haut niveau pour moi.</small>
         </div>
 
         <div class="champ champ-case">
