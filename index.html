@@ -21,6 +21,7 @@
     <!-- ===================== ONGLETS ===================== -->
     <nav class="onglets">
         <button class="onglet actif" data-onglet="plan">📋 Feuille de route</button>
+        <button class="onglet" data-onglet="recolte">🌾 Récolte &amp; trajets</button>
         <button class="onglet" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
     </nav>
 
@@ -113,8 +114,73 @@
         </div>
     </section>
 
+
     <!-- ============================================================
-         VUE 2 : RECETTES & RENTABILITÉ
+         VUE : RÉCOLTE & TRAJETS
+         ============================================================ -->
+    <section id="vue-recolte" class="vue" hidden>
+
+        <div class="bloc">
+            <h2>🌾 Que récolter, et où ?</h2>
+            <p class="explication">
+                Choisis un métier de récolte et ta tranche de niveau : l'outil interroge
+                DofusDB pour lister les ressources récoltables à ce palier.
+            </p>
+            <div class="barre-outils">
+                <div class="champ">
+                    <label for="metierRecolte">Métier de récolte</label>
+                    <select id="metierRecolte">
+                        <option value="">— choisis un métier —</option>
+                    </select>
+                </div>
+                <div class="champ">
+                    <label for="trancheRecolte">Tranche de niveau</label>
+                    <select id="trancheRecolte"></select>
+                </div>
+            </div>
+            <div id="diagRecolte" class="diagnostic"></div>
+            <div id="listeRessources"></div>
+        </div>
+
+        <div class="bloc">
+            <h2>🗺️ Mon trajet de récolte</h2>
+            <p class="avertissement">
+                ⚠️ Je ne peux pas inventer les coordonnées des maps : un trajet inventé
+                te ferait tourner en rond. Repère les maps sur la carte interactive de
+                DofusDB, puis note-les ici — ton trajet est enregistré par métier et par
+                tranche, et tu le retrouveras à chaque fois.
+            </p>
+            <p>
+                <a href="https://dofusdb.fr/fr/tools/map" target="_blank" rel="noopener">
+                    Ouvrir la carte interactive DofusDB ↗</a>
+                <span class="petite-note">
+                    (dans la barre latérale, active les objets récoltables pour voir les ressources)
+                </span>
+            </p>
+
+            <div class="ajout-etape">
+                <div class="champ">
+                    <label for="carteX">Position X</label>
+                    <input type="number" id="carteX" placeholder="ex : -2">
+                </div>
+                <div class="champ">
+                    <label for="carteY">Position Y</label>
+                    <input type="number" id="carteY" placeholder="ex : 13">
+                </div>
+                <div class="champ champ-large">
+                    <label for="carteNote">Ce qu'on y trouve</label>
+                    <input type="text" id="carteNote" placeholder="ex : 6 blés + 3 orties">
+                </div>
+                <button id="ajouterEtape" class="bouton-craft">+ Ajouter au trajet</button>
+            </div>
+
+            <div id="listeTrajet"></div>
+            <p class="petite-note" id="resumeTrajet"></p>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         VUE : RECETTES & RENTABILITÉ
          ============================================================ -->
     <section id="vue-recettes" class="vue" hidden>
 
@@ -211,6 +277,7 @@
     </footer>
 
     <script src="feuille-route.js"></script>
+    <script src="recolte.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

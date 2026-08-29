@@ -426,3 +426,104 @@ code {
     .etape-corps { padding-left: 0; }
     .ligne-tresorerie { flex-direction: column; align-items: stretch; }
 }
+
+/* ============================================================
+   ONGLET RÉCOLTE & TRAJETS
+   ============================================================ */
+
+.avertissement {
+    background: #3a2f22;
+    border-left: 3px solid var(--orange);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    color: var(--texte-doux);
+}
+
+.diagnostic { font-size: 0.83rem; margin: 10px 0; }
+.diag-ok    { color: var(--vert); }
+.diag-echec { color: var(--orange); }
+
+/* ---------- Ressources récoltables ---------- */
+.grille-ressources {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+.carte-ressource {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--fond-carte2);
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+.carte-ressource img, .carte-ressource .sans-img {
+    width: 36px; height: 36px;
+    background: var(--fond-carte);
+    border-radius: 6px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.ressource-nom { font-weight: bold; font-size: 0.87rem; color: var(--bleu); }
+.ressource-niveau { font-size: 0.75rem; color: var(--texte-doux); }
+
+/* ---------- Carnet de trajets ---------- */
+.ajout-etape {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    background: var(--fond-carte2);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 12px 0;
+}
+.champ-large { flex: 1; min-width: 200px; }
+.champ-large input { width: 100%; }
+
+.etape-trajet {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: var(--fond-carte2);
+    border-left: 3px solid var(--bleu);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    font-size: 0.86rem;
+}
+.numero-etape {
+    background: var(--bleu);
+    color: #11111b;
+    font-weight: bold;
+    border-radius: 50%;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+.coord { font-weight: bold; color: var(--jaune); font-family: monospace; }
+.note-trajet { flex: 1; color: var(--texte-doux); min-width: 120px; }
+.actions-trajet { display: flex; gap: 4px; }
+
+.bouton-mini {
+    background: var(--fond-carte);
+    color: var(--texte);
+    border: 1px solid var(--bordure);
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.bouton-mini:hover:not(:disabled) { border-color: var(--bleu); }
+.bouton-mini:disabled { opacity: 0.3; cursor: default; }
+.bouton-suppr:hover { border-color: var(--rouge); color: var(--rouge); }
+
+@media (max-width: 600px) {
+    .ajout-etape { flex-direction: column; align-items: stretch; }
+    .grille-ressources { grid-template-columns: 1fr; }
+}

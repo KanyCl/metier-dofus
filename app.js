@@ -123,6 +123,7 @@ async function chargerMetiers() {
             opt.textContent = loc(m.name);
             select.appendChild(opt);
         }
+        preparerRecolte(vrais);
         statut("✅ Connecté à DofusDB (" + vrais.length + " métiers)", "ok");
     } catch (e) {
         console.error(e);
@@ -704,6 +705,7 @@ function brancherPlan() {
             document.querySelectorAll(".onglet").forEach((b) => b.classList.remove("actif"));
             bouton.classList.add("actif");
             $("vue-plan").hidden     = bouton.dataset.onglet !== "plan";
+            $("vue-recolte").hidden  = bouton.dataset.onglet !== "recolte";
             $("vue-recettes").hidden = bouton.dataset.onglet !== "recettes";
         });
     });
@@ -715,10 +717,244 @@ function brancherPlan() {
 
 
 /* ============================================================
+   10) RÉCOLTE & TRAJETS
+   ============================================================ */
+
+// Trajets enregistrés : { "jobId|min-max": [ {x, y, note}, … ] }
+const trajets = chargerJSON("dofus_trajets", {});
+let metiersRecolteDispo = [];   // les métiers de récolte trouvés dans l'API
+
+// Clé de sauvegarde du trajet en cours (métier + tranche).
+function cleTrajet() {
+    return $("metierRecolte").value + "|" + $("trancheRecolte").value;
+}
+
+// Remplit les deux menus de l'onglet Récolte.
+function preparerRecolte(metiers) {
+    // On ne garde que les métiers dont le nom est un métier de récolte connu.
+    metiersRecolteDispo = metiers.filter((m) =>
+        METIERS_RECOLTE.some((nom) =>
+            loc(m.name).toLowerCase().startsWith(nom.toLowerCase().slice(0, 5))
+        )
+    );
+
+    const selM = $("metierRecolte");
+    for (const m of metiersRecolteDispo) {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = loc(m.name);
+        selM.appendChild(opt);
+    }
+
+    const selT = $("trancheRecolte");
+    selT.innerHTML = TRANCHES.map(
+        (t) => `<option value="${t.min}-${t.max}">Niveau ${t.min} à ${t.max}</option>`
+    ).join("");
+}
+
+// Interroge l'API pour trouver les ressources récoltables du métier.
+// On essaie plusieurs chemins possibles et on garde le premier qui répond.
+async function chargerRessources() {
+    const jobId = $("metierRecolte").value;
+    const zone = $("listeRessources");
+    const diag = $("diagRecolte");
+
+    if (!jobId) {
+        zone.innerHTML = "";
+        diag.textContent = "";
+        return;
+    }
+
+    zone.innerHTML = "";
+    diag.textContent = "Recherche des ressources récoltables…";
+
+    let trouvees = null;
+    let pisteRetenue = "";
+
+    for (const piste of PISTES_RECOLTE) {
+        try {
+            const data = await appelAPI(piste.url(jobId));
+            // La réponse peut être une liste, ou un objet contenant une liste.
+            const brut = data.data || data.skills || (Array.isArray(data) ? data : null);
+            if (brut && brut.length) {
+                trouvees = brut;
+                pisteRetenue = piste.nom;
+                break;
+            }
+        } catch (e) {
+            // On passe simplement à la piste suivante.
+        }
+    }
+
+    if (!trouvees) {
+        diag.innerHTML = `<span class="diag-echec">
+            Je n'ai pas réussi à récupérer les ressources récoltables via l'API.
+            Utilise la carte DofusDB ci-dessous, et dis-le-moi : j'ajusterai le chemin d'accès.
+        </span>`;
+        return;
+    }
+
+    // On extrait, pour chaque compétence, la ressource et le niveau requis.
+    const brutes = trouvees.map((sk) => ({
+        idRessource: premierChamp(sk, CHAMPS_RESSOURCE),
+        niveau: premierChamp(sk, CHAMPS_NIVEAU) || 0
+    })).filter((r) => r.idRessource != null);
+
+    if (!brutes.length) {
+        diag.innerHTML = `<span class="diag-echec">
+            L'API a répondu (via « ${pisteRetenue} ») mais je n'ai pas reconnu le format
+            des ressources. Dis-le-moi et je corrigerai.
+        </span>`;
+        return;
+    }
+
+    await chargerObjets(brutes.map((r) => r.idRessource));
+
+    diag.innerHTML = `<span class="diag-ok">
+        ✅ ${brutes.length} ressources trouvées (via « ${pisteRetenue} »)
+    </span>`;
+
+    afficherRessources(brutes);
+}
+
+// Affiche les ressources de la tranche de niveau choisie.
+function afficherRessources(brutes) {
+    const [min, max] = $("trancheRecolte").value.split("-").map(Number);
+
+    const dansLaTranche = brutes.filter((r) => {
+        const niv = r.niveau || (cacheObjets[r.idRessource] || {}).niveau || 0;
+        return niv >= min - 20 && niv <= max;
+    });
+
+    const liste = (dansLaTranche.length ? dansLaTranche : brutes)
+        .sort((a, b) => (a.niveau || 0) - (b.niveau || 0));
+
+    $("listeRessources").innerHTML = `
+        ${dansLaTranche.length ? "" : `<p class="petite-note">
+            Aucune ressource ne correspond exactement à cette tranche : voici la liste complète.
+        </p>`}
+        <div class="grille-ressources">
+            ${liste.map((r) => {
+                const obj = cacheObjets[r.idRessource] || { nom: "Objet #" + r.idRessource, img: "" };
+                const niv = r.niveau || obj.niveau || 0;
+                return `<div class="carte-ressource">
+                    ${obj.img ? `<img src="${obj.img}" alt="" loading="lazy">` : `<div class="sans-img"></div>`}
+                    <div>
+                        <div class="ressource-nom">${obj.nom}</div>
+                        <div class="ressource-niveau">à partir du niveau ${niv}</div>
+                    </div>
+                </div>`;
+            }).join("")}
+        </div>`;
+}
+
+/* ---------- Le carnet de trajets ---------- */
+
+function afficherTrajet() {
+    const cle = cleTrajet();
+    const etapes = trajets[cle] || [];
+    const zone = $("listeTrajet");
+
+    if (!$("metierRecolte").value) {
+        zone.innerHTML = `<p class="petite-note">Choisis d'abord un métier ci-dessus.</p>`;
+        $("resumeTrajet").textContent = "";
+        return;
+    }
+
+    if (!etapes.length) {
+        zone.innerHTML = `<p class="petite-note">
+            Aucune map enregistrée pour ce métier et cette tranche. Ajoute ta première ci-dessus.
+        </p>`;
+        $("resumeTrajet").textContent = "";
+        return;
+    }
+
+    zone.innerHTML = etapes.map((e, i) => `
+        <div class="etape-trajet">
+            <span class="numero-etape">${i + 1}</span>
+            <span class="coord">[${e.x} , ${e.y}]</span>
+            <span class="note-trajet">${e.note || "—"}</span>
+            <span class="actions-trajet">
+                <button class="bouton-mini" data-monter="${i}" ${i === 0 ? "disabled" : ""}>↑</button>
+                <button class="bouton-mini" data-descendre="${i}" ${i === etapes.length - 1 ? "disabled" : ""}>↓</button>
+                <button class="bouton-mini bouton-suppr" data-supprimer="${i}">✕</button>
+            </span>
+        </div>`).join("");
+
+    $("resumeTrajet").textContent =
+        etapes.length + " map" + (etapes.length > 1 ? "s" : "") +
+        " sur ce trajet — parcours-les dans l'ordre, puis recommence.";
+}
+
+function brancherRecolte() {
+    $("metierRecolte").addEventListener("change", () => {
+        chargerRessources();
+        afficherTrajet();
+    });
+    $("trancheRecolte").addEventListener("change", () => {
+        chargerRessources();
+        afficherTrajet();
+    });
+
+    // Ajouter une map au trajet
+    $("ajouterEtape").addEventListener("click", () => {
+        if (!$("metierRecolte").value) {
+            alert("Choisis d'abord un métier de récolte.");
+            return;
+        }
+        const x = $("carteX").value.trim();
+        const y = $("carteY").value.trim();
+        if (x === "" || y === "") {
+            alert("Indique les deux coordonnées X et Y de la map.");
+            return;
+        }
+        const cle = cleTrajet();
+        if (!trajets[cle]) trajets[cle] = [];
+        trajets[cle].push({ x: Number(x), y: Number(y), note: $("carteNote").value.trim() });
+        sauverJSON("dofus_trajets", trajets);
+
+        $("carteX").value = "";
+        $("carteY").value = "";
+        $("carteNote").value = "";
+        afficherTrajet();
+    });
+
+    // Réordonner / supprimer
+    $("listeTrajet").addEventListener("click", (e) => {
+        const cle = cleTrajet();
+        const etapes = trajets[cle];
+        if (!etapes) return;
+
+        const monter = e.target.closest("[data-monter]");
+        const descendre = e.target.closest("[data-descendre]");
+        const supprimer = e.target.closest("[data-supprimer]");
+
+        if (monter) {
+            const i = Number(monter.dataset.monter);
+            [etapes[i - 1], etapes[i]] = [etapes[i], etapes[i - 1]];
+        } else if (descendre) {
+            const i = Number(descendre.dataset.descendre);
+            [etapes[i + 1], etapes[i]] = [etapes[i], etapes[i + 1]];
+        } else if (supprimer) {
+            etapes.splice(Number(supprimer.dataset.supprimer), 1);
+        } else {
+            return;
+        }
+
+        sauverJSON("dofus_trajets", trajets);
+        afficherTrajet();
+    });
+
+    afficherTrajet();
+}
+
+
+/* ============================================================
    8) DÉMARRAGE
    ============================================================ */
 
 brancherEvenements();
 brancherPlan();
+brancherRecolte();
 rafraichirTableauBord();
 chargerMetiers();
