@@ -12,6 +12,7 @@ const API = "https://api.dofusdb.fr";
 
 // ---- Mémoire de travail (remise à zéro à chaque rechargement de page) ----
 let recettesCourantes = [];   // les recettes du métier sélectionné
+let metierCourantNom = "";    // le nom du métier affiché (pour l'intitulé)
 const cacheObjets = {};       // { idObjet: { nom, niveau, img } }  → évite de re-télécharger
 
 // ---- Sauvegardes persistantes (restent d'une session à l'autre) ----
@@ -131,6 +132,11 @@ async function chargerRecettes(jobId) {
             if (!data.data || data.data.length === 0) break;
         }
 
+        // Sécurité : on ne garde QUE les recettes dont le métier correspond
+        // vraiment à celui qui a été choisi. Même si l'API renvoyait autre
+        // chose, aucun objet d'un autre métier ne peut s'afficher.
+        toutes = toutes.filter((r) => String(r.jobId) === String(jobId));
+
         // On rassemble tous les identifiants d'objets à nommer
         // (résultats + ingrédients) puis on les télécharge par lots.
         const idsAObtenir = new Set();
@@ -220,9 +226,13 @@ function afficherRecettes() {
 
     // Statistiques
     $("statNbRecettes").textContent = liste.length;
+    document.querySelector("#statNbRecettes + .stat-label").textContent =
+        metierCourantNom ? "recettes de " + metierCourantNom : "recettes chargées";
     $("messageVide").style.display = liste.length ? "none" : "block";
     if (!liste.length) {
-        $("messageVide").textContent = "Aucune recette ne correspond à ces filtres.";
+        $("messageVide").textContent = metierCourantNom
+            ? "Aucune recette de " + metierCourantNom + " ne correspond à ces filtres."
+            : "Aucune recette ne correspond à ces filtres.";
     }
 
     // Création des cartes
@@ -398,6 +408,8 @@ function enregistrerCraft(idResultat) {
 function brancherEvenements() {
     // Changement de métier → on charge ses recettes
     $("selectMetier").addEventListener("change", (e) => {
+        // On retient le nom affiché dans le menu (ex : « Bijoutier »)
+        metierCourantNom = e.target.options[e.target.selectedIndex].textContent;
         if (e.target.value) chargerRecettes(e.target.value);
     });
 
