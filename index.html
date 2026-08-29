@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Métier Dofus</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ===================== EN-TÊTE ===================== -->
+    <header>
+        <h1>⚒️ Métier Dofus</h1>
+        <p class="sous-titre">
+            Recettes en direct depuis <strong>DofusDB</strong> ·
+            calcul de rentabilité · aide à la montée de métier · suivi des bénéfices
+        </p>
+        <!-- Bandeau qui montre si la connexion à l'API DofusDB fonctionne -->
+        <div id="statut" class="statut statut-attente">Connexion à DofusDB…</div>
+    </header>
+
+    <!-- ===================== BARRE D'OUTILS ===================== -->
+    <section class="barre-outils">
+        <div class="champ">
+            <label for="selectMetier">Métier</label>
+            <select id="selectMetier">
+                <option value="">— choisis un métier —</option>
+            </select>
+        </div>
+
+        <div class="champ">
+            <label for="niveauMetier">Mon niveau de métier</label>
+            <input type="number" id="niveauMetier" min="1" max="200" value="1" placeholder="1">
+        </div>
+
+        <div class="champ">
+            <label for="recherche">Rechercher un objet</label>
+            <input type="text" id="recherche" placeholder="ex : épée, ceinture…">
+        </div>
+
+        <div class="champ champ-case">
+            <label>
+                <input type="checkbox" id="modeMontee">
+                Mode « monter le métier »
+            </label>
+            <small>Ne garde que les recettes proches de mon niveau, triées pour l'XP.</small>
+        </div>
+
+        <div class="champ champ-case">
+            <label for="triRentabilite">Trier par</label>
+            <select id="triRentabilite">
+                <option value="niveau">Niveau de l'objet</option>
+                <option value="profit">Profit (le + rentable)</option>
+                <option value="cout">Coût de craft (le - cher)</option>
+            </select>
+        </div>
+    </section>
+
+    <!-- ===================== TABLEAU DE BORD ===================== -->
+    <section id="tableauBord" class="tableau-bord">
+        <div class="carte-stat">
+            <span class="stat-valeur" id="statNbRecettes">–</span>
+            <span class="stat-label">recettes chargées</span>
+        </div>
+        <div class="carte-stat">
+            <span class="stat-valeur" id="statProfitTotal">0</span>
+            <span class="stat-label">bénéfice cumulé (kamas)</span>
+        </div>
+        <div class="carte-stat">
+            <span class="stat-valeur" id="statNbCrafts">0</span>
+            <span class="stat-label">crafts réalisés</span>
+        </div>
+        <button id="resetBenefices" class="bouton-secondaire" title="Remet le suivi des bénéfices à zéro">
+            Réinitialiser les bénéfices
+        </button>
+    </section>
+
+    <!-- ===================== LISTE DES RECETTES ===================== -->
+    <main>
+        <div id="messageVide" class="message-vide">
+            Choisis un métier ci-dessus pour afficher ses recettes. 👆
+        </div>
+        <div id="listeRecettes" class="liste-recettes"></div>
+    </main>
+
+    <!-- ===================== SECTION HUZOUNET / INFOS ===================== -->
+    <section class="huzounet">
+        <h2>🎯 Équipements populaires par tranche de niveau (Huzounet)</h2>
+        <p>
+            Huzounet.fr n'expose pas d'API publique, ses données ne peuvent donc pas être
+            récupérées automatiquement de façon fiable. Ouvre le site pour repérer les
+            équipements populaires de ta tranche de niveau, puis note-les ici : tes notes
+            sont enregistrées dans ton navigateur.
+        </p>
+        <p>
+            <a href="https://huzounet.fr/" target="_blank" rel="noopener">Ouvrir Huzounet.fr ↗</a>
+        </p>
+        <textarea id="notesHuzounet" rows="6"
+            placeholder="Ex : Niveau 30-40 → cape « X » très demandée, se craft en Tailleur (recette : …)"></textarea>
+        <p class="petite-note">💾 Enregistré automatiquement dans ce navigateur.</p>
+    </section>
+
+    <!-- ===================== PIED DE PAGE ===================== -->
+    <footer>
+        <p>
+            Données de jeu : <a href="https://dofusdb.fr/" target="_blank" rel="noopener">DofusDB</a>
+            (API <code>api.dofusdb.fr</code>). Ce projet n'est pas affilié à Ankama.
+        </p>
+        <p class="petite-note">
+            Astuce : ouvre ce fichier directement dans ton navigateur. Les prix que tu saisis
+            et tes bénéfices sont sauvegardés en local (rien n'est envoyé sur Internet).
+        </p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

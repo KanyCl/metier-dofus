@@ -1,0 +1,259 @@
+/* ============================================================
+   Optimiseur de métiers Dofus — feuille de style
+   Palette « Catppuccin Mocha » (comme ma première page)
+   ============================================================ */
+
+:root {
+    --fond:        #1e1e2e;
+    --fond-carte:  #28283c;
+    --fond-carte2: #313145;
+    --texte:       #cdd6f4;
+    --texte-doux:  #a6adc8;
+    --bleu:        #89dceb;
+    --vert:        #a6e3a1;
+    --rouge:       #f38ba8;
+    --jaune:       #f9e2af;
+    --violet:      #cba6f7;
+    --orange:      #fab387;
+    --bordure:     #45475a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background-color: var(--fond);
+    color: var(--texte);
+    margin: 0;
+    padding: 0 16px 60px;
+    line-height: 1.5;
+}
+
+/* ---------- En-tête ---------- */
+header {
+    text-align: center;
+    padding: 28px 0 12px;
+}
+header h1 {
+    color: var(--bleu);
+    margin: 0 0 6px;
+    font-size: 2rem;
+}
+.sous-titre { color: var(--texte-doux); margin: 0 0 14px; }
+
+.statut {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+.statut-attente { background: #45475a; color: var(--jaune); }
+.statut-ok      { background: #2a3b2a; color: var(--vert); }
+.statut-erreur  { background: #4a2b33; color: var(--rouge); }
+
+/* ---------- Barre d'outils ---------- */
+.barre-outils {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    max-width: 1100px;
+    margin: 20px auto;
+    padding: 16px;
+    background: var(--fond-carte);
+    border: 1px solid var(--bordure);
+    border-radius: 12px;
+}
+.champ { display: flex; flex-direction: column; gap: 4px; }
+.champ label { font-size: 0.8rem; color: var(--texte-doux); font-weight: bold; }
+.champ small { font-size: 0.72rem; color: var(--texte-doux); max-width: 220px; }
+.champ-case { justify-content: center; }
+
+select, input[type="text"], input[type="number"] {
+    background: var(--fond-carte2);
+    color: var(--texte);
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    min-width: 160px;
+}
+input[type="number"] { min-width: 90px; }
+input:focus, select:focus { outline: 2px solid var(--bleu); }
+
+/* ---------- Tableau de bord ---------- */
+.tableau-bord {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+    max-width: 1100px;
+    margin: 0 auto 20px;
+}
+.carte-stat {
+    background: var(--fond-carte);
+    border: 1px solid var(--bordure);
+    border-radius: 12px;
+    padding: 12px 22px;
+    text-align: center;
+    min-width: 150px;
+}
+.stat-valeur { display: block; font-size: 1.7rem; font-weight: bold; color: var(--vert); }
+.stat-label  { font-size: 0.78rem; color: var(--texte-doux); }
+
+.bouton-secondaire {
+    background: var(--fond-carte2);
+    color: var(--texte);
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+.bouton-secondaire:hover { border-color: var(--rouge); color: var(--rouge); }
+
+/* ---------- Messages ---------- */
+.message-vide {
+    text-align: center;
+    color: var(--texte-doux);
+    padding: 40px 0;
+    font-size: 1.05rem;
+}
+
+/* ---------- Liste des recettes ---------- */
+.liste-recettes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+.carte-recette {
+    background: var(--fond-carte);
+    border: 1px solid var(--bordure);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.carte-recette.dans-fenetre { border-color: var(--vert); }
+
+.recette-entete { display: flex; align-items: center; gap: 10px; }
+.recette-img {
+    width: 44px; height: 44px;
+    background: var(--fond-carte2);
+    border-radius: 8px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.recette-titre { flex: 1; }
+.recette-nom { font-weight: bold; color: var(--bleu); }
+.recette-niveau { font-size: 0.78rem; color: var(--texte-doux); }
+.badge-fenetre {
+    font-size: 0.7rem; background: #2a3b2a; color: var(--vert);
+    padding: 2px 8px; border-radius: 10px; font-weight: bold;
+}
+
+/* Ingrédients */
+.ingredients { display: flex; flex-direction: column; gap: 6px; }
+.ligne-ingredient {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    padding: 4px 6px;
+    background: var(--fond-carte2);
+    border-radius: 6px;
+}
+.ligne-ingredient .qte { color: var(--jaune); font-weight: bold; }
+.ligne-ingredient .nom-ingredient { display: flex; align-items: center; gap: 6px; }
+.ingredient-craftable { color: var(--violet); cursor: help; }
+.prix-input {
+    width: 80px; min-width: 70px;
+    padding: 4px 6px; font-size: 0.85rem;
+    text-align: right;
+}
+
+/* Bloc rentabilité */
+.rentabilite {
+    border-top: 1px dashed var(--bordure);
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.9rem;
+}
+.ligne-calcul { display: flex; justify-content: space-between; }
+.ligne-calcul .valeur { font-weight: bold; }
+.profit-positif { color: var(--vert); }
+.profit-negatif { color: var(--rouge); }
+.prix-vente-ligne { display: flex; justify-content: space-between; align-items: center; }
+
+.actions-craft { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.bouton-craft {
+    background: var(--vert); color: #11111b;
+    border: none; border-radius: 8px;
+    padding: 6px 12px; cursor: pointer; font-weight: bold; font-size: 0.82rem;
+}
+.bouton-craft:hover { filter: brightness(1.1); }
+.compteur-craft { font-size: 0.8rem; color: var(--texte-doux); }
+
+.synergie-box {
+    font-size: 0.8rem;
+    background: #2b2740;
+    border: 1px solid var(--violet);
+    border-radius: 8px;
+    padding: 8px;
+    color: var(--texte-doux);
+}
+.synergie-box strong { color: var(--violet); }
+
+/* ---------- Huzounet ---------- */
+.huzounet {
+    max-width: 1100px;
+    margin: 40px auto 0;
+    padding: 20px;
+    background: var(--fond-carte);
+    border: 1px solid var(--bordure);
+    border-radius: 12px;
+}
+.huzounet h2 { color: var(--orange); margin-top: 0; }
+.huzounet a { color: var(--bleu); }
+textarea {
+    width: 100%;
+    background: var(--fond-carte2);
+    color: var(--texte);
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+/* ---------- Pied de page ---------- */
+footer {
+    max-width: 1100px;
+    margin: 40px auto 0;
+    text-align: center;
+    color: var(--texte-doux);
+    font-size: 0.85rem;
+}
+footer a { color: var(--bleu); }
+.petite-note { font-size: 0.78rem; color: var(--texte-doux); }
+code {
+    background: var(--fond-carte2);
+    padding: 1px 5px; border-radius: 4px;
+    font-size: 0.85em;
+}
+
+/* ---------- Écran étroit (téléphone) ---------- */
+@media (max-width: 600px) {
+    .barre-outils { flex-direction: column; align-items: stretch; }
+    .liste-recettes { grid-template-columns: 1fr; }
+    header h1 { font-size: 1.5rem; }
+}
