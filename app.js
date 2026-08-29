@@ -722,137 +722,165 @@ function brancherPlan() {
 
 // Trajets enregistrés : { "jobId|min-max": [ {x, y, note}, … ] }
 const trajets = chargerJSON("dofus_trajets", {});
-let metiersRecolteDispo = [];   // les métiers de récolte trouvés dans l'API
+let ressourcesCourantes = [];   // les compétences de récolte du métier choisi
 
-// Clé de sauvegarde du trajet en cours (métier + tranche).
 function cleTrajet() {
     return $("metierRecolte").value + "|" + $("trancheRecolte").value;
 }
 
-// Remplit les deux menus de l'onglet Récolte.
+// Remplit les menus de l'onglet Récolte à partir des métiers déjà chargés.
 function preparerRecolte(metiers) {
-    // On ne garde que les métiers dont le nom est un métier de récolte connu.
-    metiersRecolteDispo = metiers.filter((m) =>
+    const recolte = metiers.filter((m) =>
         METIERS_RECOLTE.some((nom) =>
             loc(m.name).toLowerCase().startsWith(nom.toLowerCase().slice(0, 5))
         )
     );
 
     const selM = $("metierRecolte");
-    for (const m of metiersRecolteDispo) {
+    for (const m of recolte) {
         const opt = document.createElement("option");
         opt.value = m.id;
         opt.textContent = loc(m.name);
         selM.appendChild(opt);
     }
 
-    const selT = $("trancheRecolte");
-    selT.innerHTML = TRANCHES.map(
+    $("trancheRecolte").innerHTML = TRANCHES.map(
         (t) => `<option value="${t.min}-${t.max}">Niveau ${t.min} à ${t.max}</option>`
     ).join("");
 }
 
-// Interroge l'API pour trouver les ressources récoltables du métier.
-// On essaie plusieurs chemins possibles et on garde le premier qui répond.
+// Récupère les compétences de récolte du métier (quoi récolter, à quel niveau).
 async function chargerRessources() {
     const jobId = $("metierRecolte").value;
-    const zone = $("listeRessources");
     const diag = $("diagRecolte");
+    ressourcesCourantes = [];
 
     if (!jobId) {
-        zone.innerHTML = "";
+        $("listeRessources").innerHTML = "";
         diag.textContent = "";
         return;
     }
 
-    zone.innerHTML = "";
+    $("listeRessources").innerHTML = "";
     diag.textContent = "Recherche des ressources récoltables…";
 
-    let trouvees = null;
+    let brut = null;
     let pisteRetenue = "";
-
     for (const piste of PISTES_RECOLTE) {
         try {
             const data = await appelAPI(piste.url(jobId));
-            // La réponse peut être une liste, ou un objet contenant une liste.
-            const brut = data.data || data.skills || (Array.isArray(data) ? data : null);
-            if (brut && brut.length) {
-                trouvees = brut;
-                pisteRetenue = piste.nom;
-                break;
-            }
-        } catch (e) {
-            // On passe simplement à la piste suivante.
-        }
+            const liste = data.data || (Array.isArray(data) ? data : null);
+            if (liste && liste.length) { brut = liste; pisteRetenue = piste.nom; break; }
+        } catch (e) { /* piste suivante */ }
     }
 
-    if (!trouvees) {
-        diag.innerHTML = `<span class="diag-echec">
-            Je n'ai pas réussi à récupérer les ressources récoltables via l'API.
-            Utilise la carte DofusDB ci-dessous, et dis-le-moi : j'ajusterai le chemin d'accès.
-        </span>`;
+    if (!brut) {
+        diag.innerHTML = `<span class="diag-echec">Impossible de récupérer les ressources
+            récoltables depuis DofusDB. Utilise la carte interactive plus bas.</span>`;
         return;
     }
 
-    // On extrait, pour chaque compétence, la ressource et le niveau requis.
-    const brutes = trouvees.map((sk) => ({
-        idRessource: premierChamp(sk, CHAMPS_RESSOURCE),
-        niveau: premierChamp(sk, CHAMPS_NIVEAU) || 0
+    // On ne garde que les compétences qui récoltent vraiment une ressource.
+    ressourcesCourantes = brut.map((sk) => ({
+        idRessource: premierChamp(sk, CHAMP_RESSOURCE),
+        idInteractif: premierChamp(sk, CHAMP_INTERACTIF),
+        niveau: premierChamp(sk, CHAMP_NIVEAU) || 0
     })).filter((r) => r.idRessource != null);
 
-    if (!brutes.length) {
-        diag.innerHTML = `<span class="diag-echec">
-            L'API a répondu (via « ${pisteRetenue} ») mais je n'ai pas reconnu le format
-            des ressources. Dis-le-moi et je corrigerai.
-        </span>`;
+    if (!ressourcesCourantes.length) {
+        diag.innerHTML = `<span class="diag-echec">L'API a répondu (via « ${pisteRetenue} »)
+            mais aucune ressource récoltable n'a été reconnue.</span>`;
         return;
     }
 
-    await chargerObjets(brutes.map((r) => r.idRessource));
-
-    diag.innerHTML = `<span class="diag-ok">
-        ✅ ${brutes.length} ressources trouvées (via « ${pisteRetenue} »)
-    </span>`;
-
-    afficherRessources(brutes);
+    await chargerObjets(ressourcesCourantes.map((r) => r.idRessource));
+    diag.innerHTML = `<span class="diag-ok">✅ ${ressourcesCourantes.length} ressources trouvées</span>`;
+    afficherRessources();
 }
 
-// Affiche les ressources de la tranche de niveau choisie.
-function afficherRessources(brutes) {
+// Affiche les ressources de la tranche choisie.
+function afficherRessources() {
     const [min, max] = $("trancheRecolte").value.split("-").map(Number);
 
-    const dansLaTranche = brutes.filter((r) => {
-        const niv = r.niveau || (cacheObjets[r.idRessource] || {}).niveau || 0;
-        return niv >= min - 20 && niv <= max;
-    });
+    // Une ressource est utile dans la tranche si on peut déjà la récolter
+    // à ce niveau (son niveau requis ne dépasse pas le haut de la tranche).
+    const utiles = ressourcesCourantes
+        .filter((r) => r.niveau <= max)
+        .sort((a, b) => b.niveau - a.niveau);   // les plus hautes d'abord : meilleure XP
 
-    const liste = (dansLaTranche.length ? dansLaTranche : brutes)
-        .sort((a, b) => (a.niveau || 0) - (b.niveau || 0));
+    if (!utiles.length) {
+        $("listeRessources").innerHTML = `<p class="petite-note">
+            Aucune ressource récoltable en dessous du niveau ${max}.</p>`;
+        return;
+    }
 
     $("listeRessources").innerHTML = `
-        ${dansLaTranche.length ? "" : `<p class="petite-note">
-            Aucune ressource ne correspond exactement à cette tranche : voici la liste complète.
-        </p>`}
+        <p class="petite-note">
+            Les plus hautes en premier : ce sont celles qui rapportent le plus d'XP
+            à ta tranche (niveau ${min} à ${max}).
+        </p>
         <div class="grille-ressources">
-            ${liste.map((r) => {
+            ${utiles.map((r, i) => {
                 const obj = cacheObjets[r.idRessource] || { nom: "Objet #" + r.idRessource, img: "" };
-                const niv = r.niveau || obj.niveau || 0;
-                return `<div class="carte-ressource">
+                const meilleure = i === 0;
+                return `<div class="carte-ressource ${meilleure ? "ressource-top" : ""}">
                     ${obj.img ? `<img src="${obj.img}" alt="" loading="lazy">` : `<div class="sans-img"></div>`}
-                    <div>
+                    <div class="ressource-infos">
                         <div class="ressource-nom">${obj.nom}</div>
-                        <div class="ressource-niveau">à partir du niveau ${niv}</div>
+                        <div class="ressource-niveau">
+                            récoltable dès le niveau ${r.niveau}
+                            ${meilleure ? ` · <span class="marque-top">meilleure XP ici</span>` : ""}
+                        </div>
                     </div>
+                    ${r.idInteractif != null
+                        ? `<button class="bouton-mini" data-maps="${r.idInteractif}"
+                                   title="Chercher les maps de cette ressource">🔍</button>`
+                        : ""}
                 </div>`;
             }).join("")}
         </div>`;
 }
 
-/* ---------- Le carnet de trajets ---------- */
+// Tente de retrouver automatiquement les maps d'une ressource.
+async function chercherMaps(idInteractif) {
+    const diag = $("diagRecolte");
+    diag.innerHTML = "Recherche des maps…";
+
+    for (const piste of PISTES_MAPS) {
+        try {
+            const data = await appelAPI(piste.url(idInteractif));
+            const liste = data.data || (Array.isArray(data) ? data : null);
+            if (!liste || !liste.length) continue;
+
+            // On ne retient que les entrées qui portent vraiment des coordonnées.
+            const maps = liste
+                .map((m) => ({
+                    x: premierChamp(m, ["posX", "x"]),
+                    y: premierChamp(m, ["posY", "y"]),
+                    note: ""
+                }))
+                .filter((m) => m.x != null && m.y != null);
+
+            if (maps.length) {
+                const cle = cleTrajet();
+                trajets[cle] = optimiserTrajet(maps);
+                sauverJSON("dofus_trajets", trajets);
+                afficherTrajet();
+                diag.innerHTML = `<span class="diag-ok">
+                    ✅ ${maps.length} maps trouvées automatiquement et ordonnées.</span>`;
+                return;
+            }
+        } catch (e) { /* piste suivante */ }
+    }
+
+    diag.innerHTML = `<span class="diag-echec">
+        DofusDB n'expose pas les maps de cette ressource. Repère-les sur la carte
+        interactive et colle les coordonnées plus bas : l'ordre sera calculé pour toi.</span>`;
+}
+
+/* ---------- Le trajet ---------- */
 
 function afficherTrajet() {
-    const cle = cleTrajet();
-    const etapes = trajets[cle] || [];
     const zone = $("listeTrajet");
 
     if (!$("metierRecolte").value) {
@@ -861,10 +889,10 @@ function afficherTrajet() {
         return;
     }
 
+    const etapes = trajets[cleTrajet()] || [];
     if (!etapes.length) {
         zone.innerHTML = `<p class="petite-note">
-            Aucune map enregistrée pour ce métier et cette tranche. Ajoute ta première ci-dessus.
-        </p>`;
+            Aucune map pour ce métier et cette tranche. Colle des coordonnées ci-dessus.</p>`;
         $("resumeTrajet").textContent = "";
         return;
     }
@@ -873,74 +901,79 @@ function afficherTrajet() {
         <div class="etape-trajet">
             <span class="numero-etape">${i + 1}</span>
             <span class="coord">[${e.x} , ${e.y}]</span>
-            <span class="note-trajet">${e.note || "—"}</span>
+            <span class="note-trajet">${e.note || ""}</span>
             <span class="actions-trajet">
-                <button class="bouton-mini" data-monter="${i}" ${i === 0 ? "disabled" : ""}>↑</button>
-                <button class="bouton-mini" data-descendre="${i}" ${i === etapes.length - 1 ? "disabled" : ""}>↓</button>
                 <button class="bouton-mini bouton-suppr" data-supprimer="${i}">✕</button>
             </span>
         </div>`).join("");
 
     $("resumeTrajet").textContent =
-        etapes.length + " map" + (etapes.length > 1 ? "s" : "") +
-        " sur ce trajet — parcours-les dans l'ordre, puis recommence.";
+        `${etapes.length} map${etapes.length > 1 ? "s" : ""} · ` +
+        `${longueurTrajet(etapes)} changements de map pour boucler le circuit, ` +
+        `puis on recommence.`;
 }
 
 function brancherRecolte() {
-    $("metierRecolte").addEventListener("change", () => {
-        chargerRessources();
-        afficherTrajet();
-    });
-    $("trancheRecolte").addEventListener("change", () => {
-        chargerRessources();
-        afficherTrajet();
+    $("metierRecolte").addEventListener("change", () => { chargerRessources(); afficherTrajet(); });
+    $("trancheRecolte").addEventListener("change", () => { afficherRessources(); afficherTrajet(); });
+
+    // Bouton 🔍 sur une ressource
+    $("listeRessources").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-maps]");
+        if (b) chercherMaps(b.dataset.maps);
     });
 
-    // Ajouter une map au trajet
-    $("ajouterEtape").addEventListener("click", () => {
+    // Ajouter des maps collées en bloc
+    $("ajouterCollage").addEventListener("click", () => {
         if (!$("metierRecolte").value) {
             alert("Choisis d'abord un métier de récolte.");
             return;
         }
-        const x = $("carteX").value.trim();
-        const y = $("carteY").value.trim();
-        if (x === "" || y === "") {
-            alert("Indique les deux coordonnées X et Y de la map.");
+        const nouvelles = lireCoordonnees($("collageMaps").value);
+        if (!nouvelles.length) {
+            alert("Aucune coordonnée reconnue. Exemple attendu : -2,13   3,-5");
             return;
         }
         const cle = cleTrajet();
         if (!trajets[cle]) trajets[cle] = [];
-        trajets[cle].push({ x: Number(x), y: Number(y), note: $("carteNote").value.trim() });
+        trajets[cle] = optimiserTrajet(trajets[cle].concat(nouvelles));
         sauverJSON("dofus_trajets", trajets);
-
-        $("carteX").value = "";
-        $("carteY").value = "";
-        $("carteNote").value = "";
+        $("collageMaps").value = "";
         afficherTrajet();
     });
 
-    // Réordonner / supprimer
-    $("listeTrajet").addEventListener("click", (e) => {
+    // Recalculer l'ordre optimal
+    $("optimiserBouton").addEventListener("click", () => {
         const cle = cleTrajet();
         const etapes = trajets[cle];
-        if (!etapes) return;
-
-        const monter = e.target.closest("[data-monter]");
-        const descendre = e.target.closest("[data-descendre]");
-        const supprimer = e.target.closest("[data-supprimer]");
-
-        if (monter) {
-            const i = Number(monter.dataset.monter);
-            [etapes[i - 1], etapes[i]] = [etapes[i], etapes[i - 1]];
-        } else if (descendre) {
-            const i = Number(descendre.dataset.descendre);
-            [etapes[i + 1], etapes[i]] = [etapes[i], etapes[i + 1]];
-        } else if (supprimer) {
-            etapes.splice(Number(supprimer.dataset.supprimer), 1);
-        } else {
+        if (!etapes || etapes.length < 3) {
+            alert("Ajoute au moins trois maps pour qu'un ordre optimal ait du sens.");
             return;
         }
+        const avant = longueurTrajet(etapes);
+        trajets[cle] = optimiserTrajet(etapes);
+        const apres = longueurTrajet(trajets[cle]);
+        sauverJSON("dofus_trajets", trajets);
+        afficherTrajet();
+        $("resumeTrajet").textContent +=
+            avant > apres ? ` (raccourci de ${avant - apres} déplacements)` : " (déjà optimal)";
+    });
 
+    // Vider
+    $("viderTrajet").addEventListener("click", () => {
+        if (!confirm("Effacer toutes les maps de ce trajet ?")) return;
+        delete trajets[cleTrajet()];
+        sauverJSON("dofus_trajets", trajets);
+        afficherTrajet();
+    });
+
+    // Supprimer une map
+    $("listeTrajet").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-supprimer]");
+        if (!b) return;
+        const etapes = trajets[cleTrajet()];
+        if (!etapes) return;
+        etapes.splice(Number(b.dataset.supprimer), 1);
         sauverJSON("dofus_trajets", trajets);
         afficherTrajet();
     });

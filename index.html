@@ -144,34 +144,34 @@
 
         <div class="bloc">
             <h2>🗺️ Mon trajet de récolte</h2>
+            <p class="explication">
+                L'outil calcule <strong>tout seul l'ordre le plus court</strong> pour passer
+                par toutes les maps. Il tente d'abord de les récupérer depuis DofusDB
+                (bouton 🔍 sur chaque ressource ci-dessus).
+            </p>
             <p class="avertissement">
-                ⚠️ Je ne peux pas inventer les coordonnées des maps : un trajet inventé
-                te ferait tourner en rond. Repère les maps sur la carte interactive de
-                DofusDB, puis note-les ici — ton trajet est enregistré par métier et par
-                tranche, et tu le retrouveras à chaque fois.
+                ⚠️ Le lien « telle ressource sur telle map » n'existe dans aucune base ouverte :
+                il n'est présent que dans les fichiers du jeu. Si la recherche automatique
+                échoue, colle les coordonnées ci-dessous — je ne les invente pas, car un
+                trajet inventé te ferait tourner en rond.
             </p>
             <p>
                 <a href="https://dofusdb.fr/fr/tools/map" target="_blank" rel="noopener">
                     Ouvrir la carte interactive DofusDB ↗</a>
                 <span class="petite-note">
-                    (dans la barre latérale, active les objets récoltables pour voir les ressources)
+                    (active les objets récoltables dans la barre latérale)
                 </span>
             </p>
 
-            <div class="ajout-etape">
-                <div class="champ">
-                    <label for="carteX">Position X</label>
-                    <input type="number" id="carteX" placeholder="ex : -2">
+            <div class="collage">
+                <label for="collageMaps">Coller des coordonnées (d'un coup)</label>
+                <textarea id="collageMaps" rows="3"
+                    placeholder="-2,13   3,-5   [1,4]   7;-2 …  (peu importe le séparateur)"></textarea>
+                <div class="actions-collage">
+                    <button id="ajouterCollage" class="bouton-craft">+ Ajouter ces maps</button>
+                    <button id="optimiserBouton" class="bouton-secondaire">🧭 Calculer le trajet le plus court</button>
+                    <button id="viderTrajet" class="bouton-secondaire">Vider le trajet</button>
                 </div>
-                <div class="champ">
-                    <label for="carteY">Position Y</label>
-                    <input type="number" id="carteY" placeholder="ex : 13">
-                </div>
-                <div class="champ champ-large">
-                    <label for="carteNote">Ce qu'on y trouve</label>
-                    <input type="text" id="carteNote" placeholder="ex : 6 blés + 3 orties">
-                </div>
-                <button id="ajouterEtape" class="bouton-craft">+ Ajouter au trajet</button>
             </div>
 
             <div id="listeTrajet"></div>
