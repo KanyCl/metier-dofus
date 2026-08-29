@@ -540,9 +540,185 @@ function recalculerCartesAffectees(idObjet) {
 
 
 /* ============================================================
+   9) FEUILLE DE ROUTE
+   ------------------------------------------------------------
+   Les données (principes, phases, investissements) sont dans
+   feuille-route.js. Ici, on les affiche et on suit la progression.
+   ============================================================ */
+
+// Étapes cochées : { idEtape: true }   ·   Produits mis en vente : { idInvest: true }
+const etapesFaites = chargerJSON("dofus_plan_etapes", {});
+const investEnVente = chargerJSON("dofus_plan_invest", {});
+
+// Toutes les étapes, à plat et dans l'ordre du parcours.
+function toutesLesEtapes() {
+    return PHASES.flatMap((ph) => ph.etapes.map((e) => ({ ...e, phase: ph })));
+}
+
+// La prochaine étape à faire = la première non cochée.
+function etapeCourante() {
+    return toutesLesEtapes().find((e) => !etapesFaites[e.id]) || null;
+}
+
+function afficherPrincipes() {
+    $("listePrincipes").innerHTML = PRINCIPES.map((p) => `
+        <div class="carte-principe">
+            <div class="principe-titre">${p.titre}</div>
+            <div class="principe-texte">${p.texte}</div>
+        </div>
+    `).join("");
+}
+
+function afficherSynergies() {
+    $("listeSynergies").innerHTML = `<div class="chaine">` + SYNERGIES.map((s) => `
+        <div class="maillon">
+            <span class="maillon-de">${s.de}</span>
+            <span class="maillon-via">${s.via} ↓</span>
+            <span class="maillon-vers">${s.vers}</span>
+        </div>
+    `).join("") + `</div>`;
+}
+
+function afficherPhases() {
+    const courante = etapeCourante();
+    const tresor = parseFloat($("tresorerie").value) || 0;
+
+    $("listePhases").innerHTML = PHASES.map((ph) => {
+        // Une phase est « accessible » si la trésorerie atteint son palier.
+        const accessible = tresor >= ph.capital;
+        const manque = ph.capital - tresor;
+
+        const etapes = ph.etapes.map((e) => {
+            const faite = !!etapesFaites[e.id];
+            const estCourante = courante && courante.id === e.id;
+            return `
+                <div class="etape ${faite ? "etape-faite" : ""} ${estCourante ? "etape-courante" : ""}">
+                    <label class="etape-entete">
+                        <input type="checkbox" data-etape="${e.id}" ${faite ? "checked" : ""}>
+                        <span class="etape-titre">${e.titre}</span>
+                        ${estCourante ? `<span class="badge-maintenant">à faire maintenant</span>` : ""}
+                    </label>
+                    <div class="etape-corps">
+                        <p><strong>Action :</strong> ${e.action}</p>
+                        <p class="etape-debloque"><strong>Débloque :</strong> ${e.debloque}</p>
+                        <p class="etape-pourquoi">💡 ${e.pourquoi}</p>
+                    </div>
+                </div>`;
+        }).join("");
+
+        return `
+            <div class="phase ${accessible ? "" : "phase-verrouillee"}">
+                <div class="phase-entete">
+                    <h3>${ph.titre}</h3>
+                    <span class="phase-lieu">${ph.lieu}</span>
+                </div>
+                <p class="phase-resume">${ph.resume}</p>
+                <p class="phase-capital">
+                    ${ph.capital === 0
+                        ? "🎬 Aucun capital nécessaire : c'est le point de départ."
+                        : accessible
+                            ? "✅ Palier atteint : " + formaterNombre(ph.capital) + " kamas"
+                            : "🔒 Palier : " + formaterNombre(ph.capital) + " kamas — il te manque " +
+                              formaterNombre(manque) + " k"}
+                </p>
+                ${etapes}
+            </div>`;
+    }).join("");
+}
+
+function afficherInvestissements() {
+    $("listeInvestissements").innerHTML = INVESTISSEMENTS.map((inv) => {
+        const debloque = !!etapesFaites[inv.debloquePar];
+        const enVente = !!investEnVente[inv.id];
+        return `
+            <div class="invest ${debloque ? "" : "invest-verrouille"}">
+                <label>
+                    <input type="checkbox" data-invest="${inv.id}"
+                           ${enVente ? "checked" : ""} ${debloque ? "" : "disabled"}>
+                    <span class="invest-nom">${inv.nom}</span>
+                </label>
+                <span class="invest-note">${debloque ? inv.note : "Se débloque plus loin dans le parcours."}</span>
+            </div>`;
+    }).join("");
+}
+
+function rafraichirPlan() {
+    const tresor = parseFloat($("tresorerie").value) || 0;
+    // Règle des 80 % : la part du capital qui devrait être investie.
+    $("statCapitalTravail").textContent = formaterNombre(tresor * 0.8);
+
+    const toutes = toutesLesEtapes();
+    const faites = toutes.filter((e) => etapesFaites[e.id]).length;
+    $("statAvancement").textContent = Math.round((faites / toutes.length) * 100) + " %";
+
+    const courante = etapeCourante();
+    $("phaseCourante").textContent = courante
+        ? "👉 Prochaine étape : " + courante.titre + " (" + courante.phase.titre + ")"
+        : "🏆 Parcours terminé : tous tes métiers sont montés !";
+
+    afficherPhases();
+    afficherInvestissements();
+}
+
+function brancherPlan() {
+    // Trésorerie (sauvegardée)
+    const champTresor = $("tresorerie");
+    champTresor.value = localStorage.getItem("dofus_tresorerie") || "";
+    champTresor.addEventListener("input", () => {
+        localStorage.setItem("dofus_tresorerie", champTresor.value);
+        rafraichirPlan();
+    });
+
+    // Cocher une étape
+    $("listePhases").addEventListener("change", (e) => {
+        const c = e.target.closest("[data-etape]");
+        if (!c) return;
+        if (c.checked) etapesFaites[c.dataset.etape] = true;
+        else delete etapesFaites[c.dataset.etape];
+        sauverJSON("dofus_plan_etapes", etapesFaites);
+        rafraichirPlan();
+    });
+
+    // Cocher un produit mis en vente
+    $("listeInvestissements").addEventListener("change", (e) => {
+        const c = e.target.closest("[data-invest]");
+        if (!c) return;
+        if (c.checked) investEnVente[c.dataset.invest] = true;
+        else delete investEnVente[c.dataset.invest];
+        sauverJSON("dofus_plan_invest", investEnVente);
+    });
+
+    // Remise à zéro de la progression
+    $("resetPlan").addEventListener("click", () => {
+        if (!confirm("Décocher toutes les étapes de la feuille de route ?")) return;
+        for (const k in etapesFaites) delete etapesFaites[k];
+        for (const k in investEnVente) delete investEnVente[k];
+        sauverJSON("dofus_plan_etapes", etapesFaites);
+        sauverJSON("dofus_plan_invest", investEnVente);
+        rafraichirPlan();
+    });
+
+    // Onglets
+    document.querySelectorAll(".onglet").forEach((bouton) => {
+        bouton.addEventListener("click", () => {
+            document.querySelectorAll(".onglet").forEach((b) => b.classList.remove("actif"));
+            bouton.classList.add("actif");
+            $("vue-plan").hidden     = bouton.dataset.onglet !== "plan";
+            $("vue-recettes").hidden = bouton.dataset.onglet !== "recettes";
+        });
+    });
+
+    afficherPrincipes();
+    afficherSynergies();
+    rafraichirPlan();
+}
+
+
+/* ============================================================
    8) DÉMARRAGE
    ============================================================ */
 
 brancherEvenements();
+brancherPlan();
 rafraichirTableauBord();
 chargerMetiers();

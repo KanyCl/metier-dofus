@@ -12,95 +12,189 @@
     <header>
         <h1>⚒️ Métier Dofus</h1>
         <p class="sous-titre">
-            Recettes en direct depuis <strong>DofusDB</strong> ·
-            calcul de rentabilité · aide à la montée de métier · suivi des bénéfices
+            Feuille de route pour monter ses métiers · recettes en direct depuis
+            <strong>DofusDB</strong> · rentabilité et suivi des bénéfices
         </p>
-        <!-- Bandeau qui montre si la connexion à l'API DofusDB fonctionne -->
         <div id="statut" class="statut statut-attente">Connexion à DofusDB…</div>
     </header>
 
-    <!-- ===================== BARRE D'OUTILS ===================== -->
-    <section class="barre-outils">
-        <div class="champ">
-            <label for="selectMetier">Métier</label>
-            <select id="selectMetier">
-                <option value="">— choisis un métier —</option>
-            </select>
+    <!-- ===================== ONGLETS ===================== -->
+    <nav class="onglets">
+        <button class="onglet actif" data-onglet="plan">📋 Feuille de route</button>
+        <button class="onglet" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
+    </nav>
+
+    <!-- ============================================================
+         VUE 1 : FEUILLE DE ROUTE
+         ============================================================ -->
+    <section id="vue-plan" class="vue">
+
+        <!-- ---------- Trésorerie : c'est elle qui pilote le plan ---------- -->
+        <div class="bloc">
+            <h2>💰 Ma trésorerie</h2>
+            <p class="explication">
+                C'est le capital qui débloque les étapes, pas le niveau. Saisis tes kamas
+                disponibles : la feuille de route se met à jour toute seule.
+            </p>
+            <div class="ligne-tresorerie">
+                <div class="champ">
+                    <label for="tresorerie">Kamas disponibles</label>
+                    <input type="number" id="tresorerie" min="0" step="1000" placeholder="0">
+                </div>
+                <div class="carte-stat">
+                    <span class="stat-valeur" id="statCapitalTravail">0</span>
+                    <span class="stat-label">à faire tourner (80 %)</span>
+                </div>
+                <div class="carte-stat">
+                    <span class="stat-valeur" id="statAvancement">0 %</span>
+                    <span class="stat-label">du parcours accompli</span>
+                </div>
+            </div>
+            <p class="petite-note" id="phaseCourante"></p>
         </div>
 
-        <div class="champ">
-            <label for="niveauMetier">Mon niveau de métier</label>
-            <input type="number" id="niveauMetier" min="1" max="200" value="1" placeholder="1">
+        <!-- ---------- Les principes de la méthode ---------- -->
+        <div class="bloc">
+            <h2>🧠 Les principes à garder en tête</h2>
+            <div id="listePrincipes" class="grille-principes"></div>
         </div>
 
-        <div class="champ">
-            <label for="recherche">Rechercher un objet</label>
-            <input type="text" id="recherche" placeholder="ex : épée, ceinture…">
+        <!-- ---------- La boucle d'investissement ---------- -->
+        <div class="bloc">
+            <h2>🔄 La boucle</h2>
+            <div class="boucle">
+                <span class="etape-boucle">Ressources</span>
+                <span class="fleche">→</span>
+                <span class="etape-boucle">Craft</span>
+                <span class="fleche">→</span>
+                <span class="etape-boucle">Produits finis</span>
+                <span class="fleche">→</span>
+                <span class="etape-boucle">HDV</span>
+                <span class="fleche">→</span>
+                <span class="etape-boucle">Kamas</span>
+                <span class="fleche">↺</span>
+                <span class="etape-boucle surligne">Réinvestissement</span>
+            </div>
+            <p class="explication">
+                Le but n'est jamais d'accumuler en banque, mais de garder le capital
+                en mouvement sur plusieurs marchés à la fois.
+            </p>
         </div>
 
-        <div class="champ">
-            <label for="filtreNiveau">Afficher</label>
-            <select id="filtreNiveau">
-                <option value="realisables">Crafts de mon niveau</option>
-                <option value="xp">Les meilleurs pour l'XP</option>
-                <option value="tous">Tous les crafts du métier</option>
-            </select>
-            <small>« Crafts de mon niveau » masque les objets trop haut niveau pour moi.</small>
+        <!-- ---------- Les phases ---------- -->
+        <div class="bloc">
+            <h2>🗺️ Le parcours, phase par phase</h2>
+            <p class="explication">
+                Coche les étapes au fur et à mesure. Celle à faire maintenant est
+                encadrée en vert.
+            </p>
+            <div id="listePhases"></div>
+            <button id="resetPlan" class="bouton-secondaire">Réinitialiser ma progression</button>
         </div>
 
-        <div class="champ champ-case">
-            <label for="triRentabilite">Trier par</label>
-            <select id="triRentabilite">
-                <option value="niveau-asc">Niveau croissant ↑</option>
-                <option value="niveau-desc">Niveau décroissant ↓</option>
-                <option value="profit">Profit (le + rentable)</option>
-                <option value="cout">Coût de craft (le - cher)</option>
-            </select>
+        <!-- ---------- Les investissements passifs ---------- -->
+        <div class="bloc">
+            <h2>📦 Mes investissements passifs</h2>
+            <p class="explication">
+                Les produits à garder en vente en permanence, et à réapprovisionner
+                dès qu'ils partent. Ils se débloquent au fil des étapes cochées.
+            </p>
+            <div id="listeInvestissements"></div>
+        </div>
+
+        <!-- ---------- La chaîne des métiers de récolte ---------- -->
+        <div class="bloc">
+            <h2>🌾 La chaîne des métiers de récolte</h2>
+            <p class="explication">
+                Chaque métier alimente le suivant : c'est ce qui rend la montée
+                quasi gratuite en haut niveau.
+            </p>
+            <div id="listeSynergies"></div>
         </div>
     </section>
 
-    <!-- ===================== TABLEAU DE BORD ===================== -->
-    <section id="tableauBord" class="tableau-bord">
-        <div class="carte-stat">
-            <span class="stat-valeur" id="statNbRecettes">–</span>
-            <span class="stat-label">recettes chargées</span>
-        </div>
-        <div class="carte-stat">
-            <span class="stat-valeur" id="statProfitTotal">0</span>
-            <span class="stat-label">bénéfice cumulé (kamas)</span>
-        </div>
-        <div class="carte-stat">
-            <span class="stat-valeur" id="statNbCrafts">0</span>
-            <span class="stat-label">crafts réalisés</span>
-        </div>
-        <button id="resetBenefices" class="bouton-secondaire" title="Remet le suivi des bénéfices à zéro">
-            Réinitialiser les bénéfices
-        </button>
-    </section>
+    <!-- ============================================================
+         VUE 2 : RECETTES & RENTABILITÉ
+         ============================================================ -->
+    <section id="vue-recettes" class="vue" hidden>
 
-    <!-- ===================== LISTE DES RECETTES ===================== -->
-    <main>
-        <div id="messageVide" class="message-vide">
-            Choisis un métier ci-dessus pour afficher ses recettes. 👆
-        </div>
-        <div id="listeRecettes" class="liste-recettes"></div>
-    </main>
+        <div class="barre-outils">
+            <div class="champ">
+                <label for="selectMetier">Métier</label>
+                <select id="selectMetier">
+                    <option value="">— choisis un métier —</option>
+                </select>
+            </div>
 
-    <!-- ===================== SECTION HUZOUNET / INFOS ===================== -->
-    <section class="huzounet">
-        <h2>🎯 Équipements populaires par tranche de niveau (Huzounet)</h2>
-        <p>
-            Huzounet.fr n'expose pas d'API publique, ses données ne peuvent donc pas être
-            récupérées automatiquement de façon fiable. Ouvre le site pour repérer les
-            équipements populaires de ta tranche de niveau, puis note-les ici : tes notes
-            sont enregistrées dans ton navigateur.
-        </p>
-        <p>
-            <a href="https://huzounet.fr/" target="_blank" rel="noopener">Ouvrir Huzounet.fr ↗</a>
-        </p>
-        <textarea id="notesHuzounet" rows="6"
-            placeholder="Ex : Niveau 30-40 → cape « X » très demandée, se craft en Tailleur (recette : …)"></textarea>
-        <p class="petite-note">💾 Enregistré automatiquement dans ce navigateur.</p>
+            <div class="champ">
+                <label for="niveauMetier">Mon niveau de métier</label>
+                <input type="number" id="niveauMetier" min="1" max="200" value="1" placeholder="1">
+            </div>
+
+            <div class="champ">
+                <label for="recherche">Rechercher un objet</label>
+                <input type="text" id="recherche" placeholder="ex : épée, ceinture…">
+            </div>
+
+            <div class="champ">
+                <label for="filtreNiveau">Afficher</label>
+                <select id="filtreNiveau">
+                    <option value="realisables">Crafts de mon niveau</option>
+                    <option value="xp">Les meilleurs pour l'XP</option>
+                    <option value="tous">Tous les crafts du métier</option>
+                </select>
+                <small>« Crafts de mon niveau » masque les objets trop haut niveau pour moi.</small>
+            </div>
+
+            <div class="champ champ-case">
+                <label for="triRentabilite">Trier par</label>
+                <select id="triRentabilite">
+                    <option value="niveau-asc">Niveau croissant ↑</option>
+                    <option value="niveau-desc">Niveau décroissant ↓</option>
+                    <option value="profit">Profit (le + rentable)</option>
+                    <option value="cout">Coût de craft (le - cher)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="tableauBord" class="tableau-bord">
+            <div class="carte-stat">
+                <span class="stat-valeur" id="statNbRecettes">–</span>
+                <span class="stat-label">recettes chargées</span>
+            </div>
+            <div class="carte-stat">
+                <span class="stat-valeur" id="statProfitTotal">0</span>
+                <span class="stat-label">bénéfice cumulé (kamas)</span>
+            </div>
+            <div class="carte-stat">
+                <span class="stat-valeur" id="statNbCrafts">0</span>
+                <span class="stat-label">crafts réalisés</span>
+            </div>
+            <button id="resetBenefices" class="bouton-secondaire" title="Remet le suivi des bénéfices à zéro">
+                Réinitialiser les bénéfices
+            </button>
+        </div>
+
+        <main>
+            <div id="messageVide" class="message-vide">
+                Choisis un métier ci-dessus pour afficher ses recettes. 👆
+            </div>
+            <div id="listeRecettes" class="liste-recettes"></div>
+        </main>
+
+        <div class="bloc huzounet">
+            <h2>🎯 Équipements populaires par tranche de niveau (Huzounet)</h2>
+            <p>
+                Huzounet.fr n'expose pas d'API publique, ses données ne peuvent donc pas être
+                récupérées automatiquement de façon fiable. Ouvre le site pour repérer les
+                équipements populaires de ta tranche de niveau — utile notamment pour choisir
+                la tranche sur laquelle forgemager.
+            </p>
+            <p><a href="https://huzounet.fr/" target="_blank" rel="noopener">Ouvrir Huzounet.fr ↗</a></p>
+            <textarea id="notesHuzounet" rows="6"
+                placeholder="Ex : Niveau 110 → cape « X » très demandée, bonne cible de FM"></textarea>
+            <p class="petite-note">💾 Enregistré automatiquement dans ce navigateur.</p>
+        </div>
     </section>
 
     <!-- ===================== PIED DE PAGE ===================== -->
@@ -110,11 +204,13 @@
             (API <code>api.dofusdb.fr</code>). Ce projet n'est pas affilié à Ankama.
         </p>
         <p class="petite-note">
-            Astuce : ouvre ce fichier directement dans ton navigateur. Les prix que tu saisis
-            et tes bénéfices sont sauvegardés en local (rien n'est envoyé sur Internet).
+            Les niveaux et montants de la feuille de route sont des <strong>repères</strong>
+            issus d'une stratégie de joueur, pas des valeurs officielles : adapte-les à ton
+            serveur et à ses prix.
         </p>
     </footer>
 
+    <script src="feuille-route.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

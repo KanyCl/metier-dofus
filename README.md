@@ -9,6 +9,13 @@ Les recettes sont récupérées **en direct** depuis l'API publique de
 
 ## Ce qu'il fait
 
+- **Feuille de route** — un parcours guidé pour monter ses métiers, organisé en phases
+  débloquées par la **trésorerie** plutôt que par le niveau. Chaque étape indique l'action
+  à mener, ce qu'elle débloque et pourquoi. Progression cochable et sauvegardée.
+- **Principes de la méthode** — garder ~80 % du capital en mouvement, viser les paliers qui
+  ouvrent un produit vendable en continu, diversifier les marchés, chaîner les métiers de récolte.
+- **Investissements passifs** — les produits à garder en vente, débloqués au fil des étapes.
+
 - **Recettes en direct** — choisis un métier, l'outil liste ses crafts (objet, niveau, ingrédients).
 - **Rentabilité** — saisis le prix des ingrédients et le prix de vente : coût de craft, profit et marge
   sont calculés automatiquement. Les prix forment un « carnet » réutilisé partout.
@@ -28,6 +35,7 @@ Les prix saisis, les bénéfices et les notes sont enregistrés **dans le naviga
 |---|---|
 | `index.html` | la structure de la page |
 | `style.css` | l'apparence |
-| `app.js` | le comportement (appels à l'API, calculs) |
+| `app.js` | le comportement (appels à l'API, calculs, feuille de route) |
+| `feuille-route.js` | la méthode de progression (phases, principes, investissements) |
 
 > Projet d'apprentissage — non affilié à Ankama.
