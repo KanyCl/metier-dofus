@@ -170,8 +170,8 @@ et sont regroupées en haut du fichier pour rester ajustables :
 | Règle | Valeur |
 |---|---|
 | Coût d'un niveau de métier | 20 × le niveau |
-| Craft d'un objet à son niveau | 20 × le niveau de l'objet (= un niveau gagné) |
-| Pénalité d'écart | ~90 % à 1 niveau, 75 % à 3, 50 % à 8, 25 % à 22, 10 % à 55 |
+| XP d'un craft | dépend **du seul niveau de la recette** (table calibrée) |
+| Pénalité d'écart de niveau | **elle n'existe pas** |
 | Cases d'ingrédients | 2 au niv. 1, 3 au niv. 10, 4 au niv. 20, puis +1 tous les 20 |
 
 Vérifié sur l'exemple de référence de la communauté (objet niveau 40 : 800 XP à
@@ -236,3 +236,42 @@ jamais pouvoir s'afficher ni s'effacer.
 
 Si une autre entrée fantôme apparaît un jour, il suffit d'ajouter son nom à cette
 liste.
+
+## 30 août 2026 (soir) — le moteur d'XP refait sur mesures réelles
+
+La première version de `xp.js` reposait sur une formule glanée sur les forums :
+« crafter un objet à son niveau rapporte 20 × son niveau », plus une pénalité
+décroissante selon l'écart de niveau. Elle donnait **27 crafts** là où DofusDB en
+annonce **159** — un facteur six.
+
+### Ce qui était juste
+La table d'XP par niveau : 20 × L pour passer de L à L+1, soit 10·L·(L−1) cumulés.
+DofusDB annonce 398 046 XP pour aller de 1 à 200, la formule en donne 398 000.
+
+### Ce qui était faux
+- **L'XP d'un craft ne vaut pas 20 × le niveau de l'objet** — elle vaut environ
+  **4/3** de ce niveau, soit quinze fois moins.
+- **La pénalité d'écart de niveau n'existe pas.** Un objet niveau 40 rapporte
+  autant au métier niveau 40 qu'au métier niveau 200. Toute la complexité de
+  l'ancienne courbe était de l'invention.
+- **L'XP se reporte d'un niveau à l'autre.** L'ancien code arrondissait à chaque
+  niveau, ce qui surestimait le total — et rendait deux des vingt mesures
+  arithmétiquement impossibles à reproduire. On n'arrondit plus qu'une fois par
+  palier.
+
+### La source
+Vingt relevés sur l'outil **XP Métier** de DofusDB (Chasseur, 1 → 200, planifié
+par tranches de dix) : pour chaque tranche, la recette et le nombre de crafts
+annoncé. De ces vingt points on déduit l'XP par craft de chaque niveau de recette.
+C'est un **calibrage, pas une théorie** : la table `XP_PAR_CRAFT_MESUREE` porte les
+valeurs, `test-xp.js` rejoue les vingt mesures. Aucune ne peut plus casser en
+silence.
+
+Entre deux points mesurés, interpolation linéaire ; au-delà du niveau 190, la
+dernière pente est prolongée.
+
+### Ce qui reste à vérifier
+Le calibrage vient du **seul Chasseur**. Si l'XP par craft dépendait aussi du
+métier ou du nombre de cases de la recette, les autres métiers dériveraient.
+Un relevé sur un métier d'équipement (Bijoutier, Cordonnier…) le dirait — et
+s'ajouterait à `test-xp.js`.

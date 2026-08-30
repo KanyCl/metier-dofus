@@ -3,23 +3,26 @@
    ------------------------------------------------------------
    Tout le calcul « combien de crafts pour monter ? » vit ici,
    en fonctions PURES (elles ne touchent ni à la page, ni au
-   réseau). C'est ce qui permet de les vérifier avec le petit
-   script de test `test-xp.js`.
+   réseau). C'est ce qui permet de les vérifier avec
+   `test-xp.js`.
 
-   ⚠️ Les règles ci-dessous sont celles observées et documentées
-   par la communauté Dofus — Ankama ne publie pas de formule
-   officielle. Elles sont volontairement regroupées en haut du
-   fichier pour être faciles à corriger si tu constates un écart
-   en jeu.
+   ⚠️ Ce fichier a été REFAIT le 30 août 2026. La version
+   précédente reposait sur une formule reprise de forums —
+   « un craft à ton niveau rapporte 20 × ton niveau », plus une
+   pénalité d'écart de niveau — et sous-estimait gravement :
+   27 crafts annoncés là où il en fallait 159. Elle est
+   remplacée par un calibrage sur des mesures réelles.
    ============================================================ */
 
 /* ------------------------------------------------------------
-   Règle 1 — Le coût d'un niveau de métier
+   1) Le coût d'un niveau de métier
    ------------------------------------------------------------
-   Crafter un objet exactement de son niveau fait gagner un
-   niveau d'un seul coup. Comme un tel craft rapporte
-   20 × niveau, il faut donc 20 × niveau d'XP pour passer du
-   niveau L au niveau L+1.
+   Passer du niveau L au niveau L+1 coûte 20 × L d'XP, ce qui
+   donne 10 × L × (L−1) d'XP cumulée pour atteindre le niveau L.
+
+   Vérifié : l'outil « XP Métier » de DofusDB annonce 398 046 XP
+   pour aller de 1 à 200, la formule en donne 398 000 — 0,01 %
+   d'écart. Cette partie-là était déjà juste.
    ------------------------------------------------------------ */
 const XP_PAR_NIVEAU = 20;
 
@@ -37,49 +40,88 @@ function xpTotaleEntre(depart, cible) {
 
 
 /* ------------------------------------------------------------
-   Règle 2 — La pénalité d'écart de niveau
+   2) Ce que rapporte un craft
    ------------------------------------------------------------
-   Plus l'objet crafté est bas par rapport à ton niveau de
-   métier, moins il rapporte. Ces paliers sont ceux relevés par
-   les joueurs ; entre deux paliers, on interpole en ligne
-   droite.
+   L'XP d'un craft dépend du NIVEAU DE LA RECETTE, et de rien
+   d'autre : ni du niveau du métier, ni de l'écart entre les
+   deux. C'est là que la version précédente se trompait, en
+   appliquant une « pénalité d'écart de niveau » que les chiffres
+   ne montrent pas.
+
+   La table ci-dessous est un CALIBRAGE, pas une théorie. Chaque
+   valeur est déduite des quantités annoncées par l'outil
+   « XP Métier » de DofusDB pour le Chasseur, niveau 1 → 200,
+   planifié par tranches de dix niveaux. `test-xp.js` rejoue les
+   vingt mesures d'origine : si une valeur bouge ici, le contrôle
+   le dit aussitôt.
+
+   L'allure approche 4/3 × le niveau de la recette, mais pas assez
+   exactement pour s'y fier : ce sont les mesures qui font foi.
    ------------------------------------------------------------ */
-const PALIERS_PENALITE = [
-    [0,   1.00],   // objet pile à mon niveau  → 100 % de l'XP
-    [1,   0.90],
-    [3,   0.75],
-    [8,   0.50],   // 8 niveaux d'écart        → la moitié
-    [22,  0.25],
-    [55,  0.10],
-    [110, 0.05]    // au-delà, l'XP devient négligeable
+const XP_PAR_CRAFT_MESUREE = [
+    [  1,  11.765],   // Bouillon de Chair
+    [ 10,  18.297],   // Boulette de Viande
+    [ 20,  24.937],   // Beignet Astrubien
+    [ 30,  37.809],   // Roulade de Carne
+    [ 40,  51.003],   // Papillote au Citron
+    [ 50,  63.930],   // Salade Sufokienne
+    [ 60,  77.016],   // Friture Amaknéenne
+    [ 70,  90.031],   // Parmentier à l'Oignon
+    [ 80, 103.365],   // Terrine Bontarienne
+    [ 90, 116.309],   // Pot-au-feu Goûteux
+    [100, 129.413],   // Poêlée Paysanne
+    [110, 141.797],   // Pemmican aux Haricots
+    [120, 155.142],   // Grillade Brâkmarienne
+    [130, 168.654],   // Marinade Sucrée-Salée
+    [140, 181.193],   // Boudin Noir
+    [150, 194.955],   // Daube aux Épices
+    [160, 207.573],   // Mijoté Récréatif
+    [170, 220.191],   // Filet Mignon
+    [180, 234.288],   // Quenelle Tijan
+    [190, 246.987]    // Andouillette de Gibier
 ];
 
-// Quelle part de l'XP reste-t-il pour un écart de `ecart` niveaux ?
-function penalite(ecart) {
-    if (ecart <= 0) return 1;                       // objet à mon niveau ou au-dessus
-    const dernier = PALIERS_PENALITE[PALIERS_PENALITE.length - 1];
-    if (ecart >= dernier[0]) return dernier[1];
+/* Combien d'XP rapporte le craft d'une recette de ce niveau ?
+   Entre deux points mesurés on interpole en ligne droite ; au-delà
+   du dernier, on prolonge la pente des deux derniers. */
+function xpParCraftDeLaRecette(niveauRecette) {
+    const niv = Math.max(1, niveauRecette);
+    const table = XP_PAR_CRAFT_MESUREE;
 
-    for (let i = 1; i < PALIERS_PENALITE.length; i++) {
-        const [ecartHaut, valHaut] = PALIERS_PENALITE[i];
-        if (ecart <= ecartHaut) {
-            const [ecartBas, valBas] = PALIERS_PENALITE[i - 1];
-            // Interpolation linéaire entre les deux paliers encadrants.
-            const part = (ecart - ecartBas) / (ecartHaut - ecartBas);
-            return valBas + (valHaut - valBas) * part;
+    // En dessous du premier point mesuré, on reste proportionnel.
+    if (niv <= table[0][0]) return table[0][1] * (niv / table[0][0]);
+
+    for (let i = 1; i < table.length; i++) {
+        const [nivHaut, xpHaut] = table[i];
+        if (niv <= nivHaut) {
+            const [nivBas, xpBas] = table[i - 1];
+            const part = (niv - nivBas) / (nivHaut - nivBas);
+            return xpBas + (xpHaut - xpBas) * part;
         }
     }
-    return dernier[1];
+
+    // Au-delà du dernier point mesuré : on prolonge la dernière pente.
+    const [nivA, xpA] = table[table.length - 2];
+    const [nivB, xpB] = table[table.length - 1];
+    return xpB + (niv - nivB) * ((xpB - xpA) / (nivB - nivA));
+}
+
+/* L'XP que ce craft me rapporte, à MON niveau de métier. Le niveau
+   de métier ne sert qu'à savoir si la recette est réalisable : il
+   ne change pas le gain. */
+function xpParCraft(niveauObjet, niveauMetier) {
+    const niv = Math.max(1, niveauObjet);
+    if (niv > niveauMetier) return 0;   // pas encore craftable
+    return xpParCraftDeLaRecette(niv);
 }
 
 
 /* ------------------------------------------------------------
-   Règle 3 — Le nombre de cases (ingrédients) débloquées
+   3) Le nombre de cases (ingrédients) débloquées
    ------------------------------------------------------------
-   Niveau 1 → 2 cases, niveau 10 → 3, niveau 20 → 4,
-   puis +1 toutes les 20 niveaux, jusqu'à 8 cases maximum.
-   Une recette qui demande plus de cases que ça est
-   tout simplement impossible à réaliser.
+   Niveau 1 → 2 cases, niveau 10 → 3, niveau 20 → 4, puis +1
+   tous les 20 niveaux, jusqu'à 8 cases maximum. Une recette qui
+   demande plus de cases que ça est impossible à réaliser.
    ------------------------------------------------------------ */
 function casesMax(niveauMetier) {
     if (niveauMetier < 10) return 2;
@@ -94,28 +136,17 @@ function craftPossible(recette, niveauMetier) {
 }
 
 
-/* ------------------------------------------------------------
-   Règle 4 — L'XP rapportée par un craft
-   ------------------------------------------------------------
-   Base : 20 × le niveau de l'OBJET (elle ne bouge pas quand tu
-   montes). C'est la pénalité d'écart qui fait fondre le gain au
-   fil des niveaux.
-   ------------------------------------------------------------ */
-function xpParCraft(niveauObjet, niveauMetier) {
-    const niv = Math.max(1, niveauObjet);
-    if (niv > niveauMetier) return 0;   // pas encore craftable
-    return XP_PAR_NIVEAU * niv * penalite(niveauMetier - niv);
-}
-
-
 /* ============================================================
-   LE PLAN DE MONTÉE
+   4) LE PLAN DE MONTÉE
    ------------------------------------------------------------
-   Niveau par niveau, on choisit la recette qui rapporte le plus
+   Niveau par niveau, on retient la recette qui rapporte le plus
    d'XP parmi celles réalisables, et on compte les crafts. Comme
-   la meilleure recette change au fil de la montée, on regroupe
-   ensuite les niveaux consécutifs qui utilisent la même recette
-   en « paliers » — c'est ça, la feuille de route de montée.
+   l'XP ne dépend que du niveau de la recette, la meilleure est
+   toujours la plus haute réalisable — et rester sur une recette
+   basse n'a aucun intérêt.
+
+   Les niveaux consécutifs qui partagent la même recette sont
+   regroupés en paliers : c'est la feuille de route de montée.
 
    `recettes` : [{ id, nom, niveauObjet, nbCases, ingredients: [{id, qte}] }]
    ============================================================ */
@@ -135,30 +166,35 @@ function planDeMontee(recettes, niveauDepart, niveauCible) {
             if (gain > meilleureXp) { meilleureXp = gain; meilleure = r; }
         }
 
-        // Aucune recette réalisable : on ne peut rien proposer pour ce niveau.
+        // Aucune recette réalisable : rien à proposer pour ce niveau.
         if (!meilleure || meilleureXp <= 0) { niveauxSansRecette++; continue; }
 
-        const crafts = Math.ceil(xpPourMonterDe(niv) / meilleureXp);
-        totalCrafts += crafts;
-
-        // On cumule les ingrédients à réunir.
-        for (const ing of meilleure.ingredients || []) {
-            ingredientsTotaux[ing.id] = (ingredientsTotaux[ing.id] || 0) + ing.qte * crafts;
-        }
-
-        // Regroupement : même recette que le palier précédent → on l'étend.
+        // Même recette que le palier précédent → on l'étend.
         const precedent = paliers[paliers.length - 1];
         if (precedent && precedent.recette.id === meilleure.id) {
             precedent.auNiveau = niv + 1;
-            precedent.crafts += crafts;
+            precedent.xpAGagner += xpPourMonterDe(niv);
         } else {
             paliers.push({
                 recette: meilleure,
                 deNiveau: niv,
                 auNiveau: niv + 1,
-                crafts: crafts,
+                xpAGagner: xpPourMonterDe(niv),
                 xpParCraft: meilleureXp
             });
+        }
+    }
+
+    /* On ne compte les crafts qu'UNE FOIS par palier. L'XP en trop d'un
+       craft n'est pas perdue : elle se reporte sur le niveau suivant.
+       Arrondir à chaque niveau surestimait le total — et rendait deux des
+       vingt mesures de DofusDB impossibles à reproduire. */
+    for (const palier of paliers) {
+        palier.crafts = Math.ceil(palier.xpAGagner / palier.xpParCraft);
+        totalCrafts += palier.crafts;
+        for (const ing of palier.recette.ingredients || []) {
+            ingredientsTotaux[ing.id] =
+                (ingredientsTotaux[ing.id] || 0) + ing.qte * palier.crafts;
         }
     }
 
@@ -185,11 +221,11 @@ function meilleursCraftsMaintenant(recettes, niveauMetier, combien) {
 
 
 // Rend ces fonctions utilisables par le script de test (Node),
-// sans rien casser dans le navigateur où tout est déjà global.
+// sans rien changer dans le navigateur où tout est déjà global.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        XP_PAR_NIVEAU, xpPourMonterDe, xpTotaleEntre, penalite,
-        casesMax, craftPossible, xpParCraft, planDeMontee,
-        meilleursCraftsMaintenant
+        XP_PAR_NIVEAU, XP_PAR_CRAFT_MESUREE, xpPourMonterDe, xpTotaleEntre,
+        xpParCraftDeLaRecette, xpParCraft, casesMax, craftPossible,
+        planDeMontee, meilleursCraftsMaintenant
     };
 }

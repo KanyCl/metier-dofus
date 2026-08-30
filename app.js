@@ -1595,20 +1595,6 @@ function afficherPlan(depart, cible) {
         <h3 class="titre-plan">Plan de montée — ${echapper(nomMetier)} :
             niveau ${depart} → ${cible}</h3>
 
-        <div class="avertissement avertissement-fort">
-            ⚠️ <strong>Le nombre de crafts est en cours de recalage.</strong>
-            Comparé à l'outil « XP Métier » de DofusDB, le calcul tombe juste sur
-            les premiers niveaux (Chasseur 1 → 10 : 77 crafts de part et d'autre)
-            mais <strong>sous-estime ensuite</strong> — 27 crafts annoncés contre
-            159 pour Chasseur 10 → 20. En cause : le niveau attribué à la recette,
-            et la courbe de perte d'XP par écart de niveau.
-            <br><br>
-            Ce qui reste fiable : l'ordre des paliers, les recettes retenues, la
-            composition de la liste de courses et les synergies. Ce qui ne l'est
-            pas encore : les <strong>quantités</strong>, et donc les montants.
-            Recoupe-les avec
-            <a href="https://dofusdb.fr/fr/tools/jobs-xp" target="_blank" rel="noopener">XP Métier de DofusDB</a>.
-        </div>
         ${resume}
         ${alerte}
 

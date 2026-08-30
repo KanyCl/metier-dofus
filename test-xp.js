@@ -1,15 +1,17 @@
 /* ============================================================
    Vérification du moteur d'XP (xp.js)
    ------------------------------------------------------------
-   Deux façons de lancer ces contrôles, selon ce dont tu disposes :
+   Deux façons de lancer ces contrôles :
 
-   · avec Node      →  node test-xp.js
-   · sans rien      →  ouvre index.html, puis dans la console du
-                       navigateur (F12) tape :  lancerTestsXp()
+   · avec Node   →  node test-xp.js
+   · sans rien   →  ouvre index.html, puis dans la console du
+                    navigateur (F12) tape :  lancerTestsXp()
 
-   Les valeurs testées sont celles relevées par la communauté.
-   Si tu ajustes les paliers dans xp.js, relance ces contrôles :
-   ils diront tout de suite si quelque chose ne colle plus.
+   Le cœur de ces contrôles, ce sont les VINGT MESURES relevées
+   sur l'outil « XP Métier » de DofusDB pour le Chasseur, niveau
+   1 → 200. Ce ne sont pas des hypothèses : ce sont les chiffres
+   que l'outil de référence annonce. Si le moteur s'en écarte,
+   c'est le moteur qui a tort.
    ============================================================ */
 
 function lancerTestsXp(moteur) {
@@ -31,18 +33,42 @@ function lancerTestsXp(moteur) {
     lignes.push("\n— Le coût d'un niveau —");
     verifier("Monter du niveau 40 coûte 800 XP", m.xpPourMonterDe(40), 800);
     verifier("Aller du niveau 1 au niveau 3 coûte 20+40=60 XP", m.xpTotaleEntre(1, 3), 60);
+    // DofusDB annonce 398 046 XP pour le parcours complet.
+    verifier("Niveau 1 → 200 coûte environ 398 000 XP",
+             m.xpTotaleEntre(1, 200), 398046, 50);
 
-    lignes.push("\n— L'exemple de référence : la baguette niveau 40 —");
-    // Relevé communautaire : à niveau égal le craft rapporte 20 × 40 = 800 XP,
-    // puis l'XP fond à mesure que l'écart de niveau se creuse.
-    verifier("Sculpteur niv. 40, objet niv. 40 → 800 XP", m.xpParCraft(40, 40), 800);
-    verifier("Sculpteur niv. 48, objet niv. 40 → ~400 XP", m.xpParCraft(40, 48), 400, 10);
-    verifier("Sculpteur niv. 62, objet niv. 40 → ~200 XP", m.xpParCraft(40, 62), 200, 10);
+    lignes.push("\n— Les 20 mesures relevées sur DofusDB (Chasseur, 1 → 200) —");
+    /* Chaque ligne : la recette, son niveau, et le nombre de crafts que
+       l'outil « XP Métier » annonce pour les dix niveaux qui suivent. */
+    const MESURES_DOFUSDB = [
+        ["Bouillon de Chair",        1,  77], ["Boulette de Viande",     10, 159],
+        ["Beignet Astrubien",       20, 197], ["Roulade de Carne",       30, 183],
+        ["Papillote au Citron",     40, 175], ["Salade Sufokienne",      50, 171],
+        ["Friture Amaknéenne",      60, 168], ["Parmentier à l'Oignon",  70, 166],
+        ["Terrine Bontarienne",     80, 164], ["Pot-au-feu Goûteux",     90, 163],
+        ["Poêlée Paysanne",        100, 162], ["Pemmican aux Haricots", 110, 162],
+        ["Grillade Brâkmarienne",  120, 161], ["Marinade Sucrée-Salée", 130, 160],
+        ["Boudin Noir",            140, 160], ["Daube aux Épices",      150, 159],
+        ["Mijoté Récréatif",       160, 159], ["Filet Mignon",          170, 159],
+        ["Quenelle Tijan",         180, 158], ["Andouillette de Gibier",190, 158]
+    ];
+    for (const [nom, niveau, craftsAttendus] of MESURES_DOFUSDB) {
+        const fin = niveau === 1 ? 10 : niveau + 10;
+        // On impose CETTE recette, exactement comme le fait DofusDB.
+        const plan = m.planDeMontee(
+            [{ id: 1, nom: nom, niveauObjet: niveau, nbCases: 2, ingredients: [] }],
+            niveau, fin);
+        verifier(nom.padEnd(23) + " niv. " + String(niveau).padStart(3) +
+                 " → " + String(fin).padStart(3), plan.totalCrafts, craftsAttendus);
+    }
 
-    lignes.push("\n— Les bornes —");
+    lignes.push("\n— Ce que l'XP ne dépend PAS —");
     verifier("Un objet trop haut niveau ne rapporte rien", m.xpParCraft(80, 40), 0);
-    verifier("1 niveau d'écart → 90 % de l'XP", m.penalite(1), 0.9, 0.001);
-    verifier("3 niveaux d'écart → 75 % de l'XP", m.penalite(3), 0.75, 0.001);
+    /* Le point sur lequel la version précédente se trompait : il n'y a pas
+       de pénalité d'écart de niveau. Un objet niveau 40 rapporte autant au
+       métier niveau 40 qu'au métier niveau 200. */
+    verifier("Le niveau du métier ne change pas le gain",
+             m.xpParCraft(40, 200), m.xpParCraft(40, 40), 0.001);
 
     lignes.push("\n— Les cases débloquées —");
     verifier("Niveau 1 → 2 cases", m.casesMax(1), 2);
@@ -53,27 +79,19 @@ function lancerTestsXp(moteur) {
     verifier("Niveau 200 → 8 cases (plafond)", m.casesMax(200), 8);
 
     lignes.push("\n— Le plan de montée —");
-    // Cas idéal : une recette pile à chaque niveau. Un craft = un niveau,
-    // donc monter de 10 à 20 doit demander exactement 10 crafts.
-    const ideales = [];
-    for (let n = 1; n <= 200; n++) {
-        ideales.push({ id: n, nom: "Objet niv. " + n, niveauObjet: n, nbCases: 2,
-                       ingredients: [{ id: 1000 + n, qte: 3 }] });
-    }
-    const planIdeal = m.planDeMontee(ideales, 10, 20);
-    verifier("Recette parfaite à chaque niveau → 10 crafts pour 10 niveaux",
-             planIdeal.totalCrafts, 10);
-    verifier("Les ingrédients suivent : 10 crafts × 3 unités = 30 pièces",
-             Object.values(planIdeal.ingredientsTotaux).reduce((a, b) => a + b, 0), 30);
-
-    // Cas réaliste : une seule recette, bien en dessous du niveau visé.
-    const planPauvre = m.planDeMontee(
-        [{ id: 1, nom: "Petit objet", niveauObjet: 10, nbCases: 2, ingredients: [{ id: 5, qte: 2 }] }],
-        10, 30);
-    lignes.push("  ℹ️  Une seule recette niv. 10 pour monter de 10 à 30 : " +
-                planPauvre.totalCrafts + " crafts (l'XP fond avec l'écart)");
-    verifier("Ce plan demande plus de crafts que le plan idéal",
-             planPauvre.totalCrafts > 20 ? 1 : 0, 1);
+    // Avec plusieurs recettes disponibles, le moteur doit toujours retenir la
+    // plus haute réalisable : c'est elle qui rapporte le plus.
+    const choix = [
+        { id: 1, nom: "basse", niveauObjet: 10, nbCases: 2, ingredients: [{ id: 9, qte: 1 }] },
+        { id: 2, nom: "haute", niveauObjet: 50, nbCases: 2, ingredients: [{ id: 9, qte: 2 }] }
+    ];
+    const plan = m.planDeMontee(choix, 50, 60);
+    verifier("À niveau 50, c'est la recette niveau 50 qui est retenue",
+             plan.paliers[0].recette.id, 2);
+    verifier("…et elle donne le même total que la mesure DofusDB",
+             plan.totalCrafts, 171);
+    verifier("Les ingrédients suivent : 171 crafts × 2 unités",
+             plan.ingredientsTotaux[9], 342);
 
     // Une recette trop grande pour le niveau ne doit jamais être proposée.
     const planCases = m.planDeMontee(
