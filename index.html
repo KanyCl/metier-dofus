@@ -20,16 +20,118 @@
 
     <!-- ===================== ONGLETS ===================== -->
     <nav class="onglets">
-        <button class="onglet actif" data-onglet="plan">📋 Feuille de route</button>
+        <button class="onglet actif" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
+        <button class="onglet" data-onglet="optim">📈 Optimiser ma montée</button>
+        <button class="onglet" data-onglet="metiers">🛠️ Mes métiers</button>
+        <button class="onglet" data-onglet="plan">📋 Feuille de route</button>
         <button class="onglet" data-onglet="recolte">🌾 Que récolter</button>
-        <button class="onglet" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
         <button class="onglet" data-onglet="methode">🧭 La méthode</button>
     </nav>
 
     <!-- ============================================================
          VUE 1 : FEUILLE DE ROUTE
          ============================================================ -->
-    <section id="vue-plan" class="vue">
+    <!-- ============================================================
+         VUE : OPTIMISER MA MONTÉE
+         ============================================================ -->
+    <section id="vue-optim" class="vue" data-vue="optim" hidden>
+
+        <div class="bloc">
+            <h2>📈 Combien de crafts pour monter ce métier ?</h2>
+            <p class="explication">
+                L'outil parcourt ton métier <strong>niveau par niveau</strong>. À chaque
+                niveau il retient la recette qui rapporte le plus d'XP parmi celles que tu
+                peux vraiment réaliser, compte les crafts nécessaires, additionne les
+                ingrédients et chiffre le tout. Il te dit aussi lesquels tu peux
+                <strong>fabriquer toi-même</strong> avec tes autres métiers.
+            </p>
+
+            <div class="barre-outils">
+                <div class="champ">
+                    <label for="metierOptim">Métier à monter</label>
+                    <select id="metierOptim">
+                        <option value="">— choisis un métier —</option>
+                    </select>
+                </div>
+                <div class="champ">
+                    <label for="niveauDepartOptim">Niveau actuel</label>
+                    <input type="number" id="niveauDepartOptim" min="0" max="199" value="1">
+                </div>
+                <div class="champ">
+                    <label for="niveauCibleOptim">Niveau visé</label>
+                    <input type="number" id="niveauCibleOptim" min="1" max="200" value="20">
+                </div>
+                <div class="champ champ-case">
+                    <label>&nbsp;</label>
+                    <button id="calculerPlan" class="bouton-principal">Calculer mon plan</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultatOptim">
+            <p class="message-vide">
+                Choisis un métier et un niveau à atteindre, puis lance le calcul. 👆
+            </p>
+        </div>
+
+        <div class="bloc">
+            <h2>🧮 D'où viennent ces chiffres ?</h2>
+            <ul class="liste-regles">
+                <li>Crafter un objet <strong>exactement de ton niveau</strong> rapporte
+                    <strong>20 × ton niveau</strong> d'XP — soit précisément un niveau
+                    gagné en un seul craft.</li>
+                <li>Plus l'objet est <strong>en dessous</strong> de ton niveau, moins il
+                    rapporte : environ 90 % à 1 niveau d'écart, 75 % à 3, la moitié à 8,
+                    un quart à 22, presque plus rien à 55. C'est l'<strong>XP de craft
+                    dégressive</strong> dont parle la méthode.</li>
+                <li>Le <strong>nombre de cases</strong> d'une recette est limité par ton
+                    niveau : 2 cases au niveau 1, 3 au niveau 10, 4 au niveau 20, puis
+                    +1 tous les 20 niveaux. Une recette trop grande est écartée.</li>
+            </ul>
+            <p class="petite-note">
+                ⚠️ Ankama ne publie pas de formule officielle : ces règles viennent des
+                relevés de la communauté. Elles sont regroupées en haut de
+                <code>xp.js</code> pour rester faciles à ajuster, et vérifiées par
+                <code>test-xp.js</code> (en console : <code>lancerTestsXp()</code>).
+            </p>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         VUE : MES MÉTIERS
+         ============================================================ -->
+    <section id="vue-metiers" class="vue" data-vue="metiers" hidden>
+
+        <div class="bloc">
+            <h2>🛠️ Mes métiers</h2>
+            <p class="explication">
+                Renseigne ici le niveau de chacun de tes métiers. C'est la
+                <strong>seule saisie à faire</strong> : les autres onglets viennent lire
+                ces niveaux. Laisse vide un métier que tu n'as pas commencé.
+            </p>
+
+            <div class="tableau-bord">
+                <div class="carte-stat">
+                    <span class="stat-valeur" id="statMetiersCommences">0</span>
+                    <span class="stat-label">métiers commencés</span>
+                </div>
+                <div class="carte-stat">
+                    <span class="stat-valeur" id="statMetiersMax">0</span>
+                    <span class="stat-label">métiers au niveau 200</span>
+                </div>
+                <button id="resetMetiers" class="bouton-secondaire">
+                    Effacer tous mes niveaux
+                </button>
+            </div>
+
+            <div id="listeMesMetiers" class="grille-metiers">
+                <p class="message-vide">Chargement de la liste des métiers…</p>
+            </div>
+            <p class="petite-note">💾 Enregistré automatiquement dans ce navigateur.</p>
+        </div>
+    </section>
+
+    <section id="vue-plan" class="vue" data-vue="plan">
 
         <!-- ---------- Trésorerie : c'est elle qui pilote le plan ---------- -->
         <div class="bloc">
@@ -119,7 +221,7 @@
     <!-- ============================================================
          VUE : RÉCOLTE & TRAJETS
          ============================================================ -->
-    <section id="vue-recolte" class="vue" hidden>
+    <section id="vue-recolte" class="vue" data-vue="recolte" hidden>
 
         <div class="bloc">
             <h2>🌾 Que récolter à mon niveau ?</h2>
@@ -156,7 +258,7 @@
     <!-- ============================================================
          VUE : RECETTES & RENTABILITÉ
          ============================================================ -->
-    <section id="vue-recettes" class="vue" hidden>
+    <section id="vue-recettes" class="vue" data-vue="recettes" hidden>
 
         <div class="bloc encart-ratios">
             <h2>📊 Lire les chiffres correctement</h2>
@@ -227,6 +329,7 @@
                     <option value="marge-jour">Marge journalière (le + gros potentiel)</option>
                     <option value="indice">Indice de profitabilité</option>
                     <option value="profit">Profit par craft</option>
+                    <option value="xp">XP par craft (le + rapide à monter)</option>
                     <option value="cout">Coût de craft (le - cher)</option>
                 </select>
                 <small>Les deux premiers ont besoin du nombre de ventes sur 30 jours.</small>
@@ -276,7 +379,7 @@
     <!-- ============================================================
          VUE : LA MÉTHODE
          ============================================================ -->
-    <section id="vue-methode" class="vue" hidden>
+    <section id="vue-methode" class="vue" data-vue="methode" hidden>
 
         <div class="bloc">
             <h2>🧭 La méthode en une phrase</h2>
@@ -397,9 +500,13 @@
         </p>
     </footer>
 
+    <script src="xp.js"></script>
     <script src="feuille-route.js"></script>
     <script src="methode.js"></script>
     <script src="recolte.js"></script>
     <script src="app.js"></script>
+    <!-- Contrôles du moteur d'XP : ne s'exécutent pas tout seuls.
+         Tape lancerTestsXp() dans la console du navigateur (F12). -->
+    <script src="test-xp.js"></script>
 </body>
 </html>

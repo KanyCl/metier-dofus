@@ -63,6 +63,17 @@ function formaterNombre(n) {
     return Math.round(n).toLocaleString("fr-FR");
 }
 
+// Neutralise les caractères qui auraient un sens en HTML. À utiliser sur
+// TOUT texte venu de l'extérieur (noms d'objets, de métiers…) avant de le
+// placer dans un innerHTML.
+function echapper(texte) {
+    return String(texte == null ? "" : texte)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
 // Appel générique à l'API. Renvoie l'objet JSON, ou lève une erreur.
 async function appelAPI(chemin) {
     const reponse = await fetch(API + chemin);
@@ -111,11 +122,15 @@ async function chargerMetiers() {
         const compteurs = await Promise.all(
             metiers.map((m) => compterRecettes(m.id))
         );
-        let vrais = metiers.filter((m, i) => compteurs[i] > 0);
+        metiers.forEach((m, i) => { m.aDesRecettes = compteurs[i] > 0; });
+        let vrais = metiers.filter((m) => m.aDesRecettes);
 
         // Sécurité : si la vérification échoue (réseau capricieux), on
         // préfère afficher tous les métiers plutôt qu'une liste vide.
-        if (vrais.length === 0) vrais = metiers;
+        if (vrais.length === 0) {
+            vrais = metiers;
+            metiers.forEach((m) => { m.aDesRecettes = true; });
+        }
 
         const select = $("selectMetier");
         for (const m of vrais) {
@@ -124,6 +139,10 @@ async function chargerMetiers() {
             opt.textContent = loc(m.name);
             select.appendChild(opt);
         }
+        // « Mes métiers » reçoit la liste complète : c'est la source de
+        // vérité que liront les onglets Rentabilité, Optimisation et Récolte.
+        enregistrerMetiers(metiers);
+        remplirMetiersOptimisation();
         preparerRecolte(metiers);
         statut("✅ Connecté à DofusDB (" + vrais.length + " métiers)", "ok");
     } catch (e) {
@@ -137,6 +156,41 @@ async function chargerMetiers() {
    3) CHARGEMENT DES RECETTES D'UN MÉTIER
    ============================================================ */
 
+/* Récupère les recettes d'un métier et le détail des objets qu'elles
+   utilisent. Partagé par l'onglet Rentabilité et l'onglet Optimisation :
+   les deux ont besoin exactement de la même chose. */
+async function recupererRecettesDuMetier(jobId) {
+    // On récupère toutes les recettes du métier (pagination par pages de 50).
+    let toutes = [];
+    let skip = 0;
+    let total = Infinity;
+    while (skip < total && skip < 600) { // garde-fou : 600 recettes max
+        const data = await appelAPI(
+            "/recipes?jobId=" + jobId + "&$limit=50&$skip=" + skip + "&lang=fr"
+        );
+        total = data.total ?? data.data.length;
+        toutes = toutes.concat(data.data || []);
+        skip += 50;
+        if (!data.data || data.data.length === 0) break;
+    }
+
+    // Sécurité : on ne garde QUE les recettes dont le métier correspond
+    // vraiment à celui qui a été choisi. Même si l'API renvoyait autre
+    // chose, aucun objet d'un autre métier ne peut s'afficher.
+    toutes = toutes.filter((r) => String(r.jobId) === String(jobId));
+
+    // On rassemble tous les identifiants d'objets à nommer
+    // (résultats + ingrédients) puis on les télécharge par lots.
+    const idsAObtenir = new Set();
+    for (const r of toutes) {
+        if (r.resultId != null) idsAObtenir.add(r.resultId);
+        for (const ing of r.ingredientIds || []) idsAObtenir.add(ing);
+    }
+    await chargerObjets([...idsAObtenir]);
+
+    return toutes;
+}
+
 async function chargerRecettes(jobId) {
     recettesCourantes = [];
     $("listeRecettes").innerHTML = "";
@@ -144,35 +198,7 @@ async function chargerRecettes(jobId) {
     $("messageVide").textContent = "Chargement des recettes…";
 
     try {
-        // On récupère toutes les recettes du métier (pagination par pages de 50).
-        let toutes = [];
-        let skip = 0;
-        let total = Infinity;
-        while (skip < total && skip < 600) { // garde-fou : 600 recettes max
-            const data = await appelAPI(
-                "/recipes?jobId=" + jobId + "&$limit=50&$skip=" + skip + "&lang=fr"
-            );
-            total = data.total ?? data.data.length;
-            toutes = toutes.concat(data.data || []);
-            skip += 50;
-            if (!data.data || data.data.length === 0) break;
-        }
-
-        // Sécurité : on ne garde QUE les recettes dont le métier correspond
-        // vraiment à celui qui a été choisi. Même si l'API renvoyait autre
-        // chose, aucun objet d'un autre métier ne peut s'afficher.
-        toutes = toutes.filter((r) => String(r.jobId) === String(jobId));
-
-        // On rassemble tous les identifiants d'objets à nommer
-        // (résultats + ingrédients) puis on les télécharge par lots.
-        const idsAObtenir = new Set();
-        for (const r of toutes) {
-            if (r.resultId != null) idsAObtenir.add(r.resultId);
-            for (const ing of r.ingredientIds || []) idsAObtenir.add(ing);
-        }
-        await chargerObjets([...idsAObtenir]);
-
-        recettesCourantes = toutes;
+        recettesCourantes = await recupererRecettesDuMetier(jobId);
         afficherRecettes();
     } catch (e) {
         console.error(e);
@@ -237,16 +263,22 @@ function afficherRecettes() {
 
     // Filtre par niveau. Le niveau de l'objet sert de niveau de métier requis
     // pour le crafter : un objet niveau 60 demande un métier niveau 60.
+    // « Réalisable » ne veut pas seulement dire « à mon niveau » : une recette
+    // occupe aussi des cases d'ingrédients, qui se débloquent avec le niveau.
+    // C'est le moteur d'XP (xp.js) qui porte cette règle.
+    const fiche = (x) => ({
+        niveauObjet: niveauDe(x),
+        nbCases: (x.recette.ingredientIds || []).length
+    });
+
     if (filtreNiveau === "realisables") {
         // Uniquement ce que je peux crafter maintenant.
-        liste = liste.filter((x) => niveauDe(x) <= monNiveau);
+        liste = liste.filter((x) => craftPossible(fiche(x), monNiveau));
     } else if (filtreNiveau === "xp") {
         // Les crafts réalisables les plus proches de mon niveau : ce sont eux
         // qui rapportent le plus d'XP (un objet très bas niveau n'en donne plus).
-        liste = liste.filter((x) => {
-            const niv = niveauDe(x);
-            return niv <= monNiveau && niv >= monNiveau - 30;
-        });
+        liste = liste.filter((x) =>
+            craftPossible(fiche(x), monNiveau) && niveauDe(x) >= monNiveau - 30);
     }
     // "tous" : on n'enlève rien.
 
@@ -255,6 +287,8 @@ function afficherRecettes() {
         if (tri === "marge-jour") return b.margeJour - a.margeJour;
         if (tri === "indice")     return b.indice - a.indice;
         if (tri === "profit") return b.profit - a.profit;
+        if (tri === "xp")     return xpParCraft(niveauDe(b), monNiveau)
+                                   - xpParCraft(niveauDe(a), monNiveau);
         if (tri === "cout")   return a.cout - b.cout;
         // Tri par niveau de l'objet : croissant (du + bas au + haut)
         // ou décroissant (du + haut au + bas).
@@ -330,13 +364,18 @@ function creerCarteRecette(x, monNiveau) {
     carte.className = "carte-recette" + (dansFenetre ? " dans-fenetre" : "");
 
     // ---- En-tête (image + nom + niveau) ----
+    // Ce que ce craft rapporte en XP à mon niveau actuel (voir xp.js).
+    const gainXp = xpParCraft(nivObjet, monNiveau);
+
     const entete = document.createElement("div");
     entete.className = "recette-entete";
     entete.innerHTML = `
-        ${objet.img ? `<img class="recette-img" src="${objet.img}" alt="" loading="lazy">` : `<div class="recette-img"></div>`}
+        ${objet.img ? `<img class="recette-img" src="${echapper(objet.img)}" alt="" loading="lazy">` : `<div class="recette-img"></div>`}
         <div class="recette-titre">
-            <div class="recette-nom">${objet.nom}</div>
-            <div class="recette-niveau">Niveau ${nivObjet}</div>
+            <div class="recette-nom">${echapper(objet.nom)}</div>
+            <div class="recette-niveau">
+                Niveau ${nivObjet}${gainXp > 0 ? " · " + formaterNombre(gainXp) + " XP / craft" : ""}
+            </div>
         </div>
         ${dansFenetre ? `<span class="badge-fenetre">bon pour l'XP</span>` : ""}
     `;
@@ -351,7 +390,7 @@ function creerCarteRecette(x, monNiveau) {
         ligne.className = "ligne-ingredient";
         ligne.innerHTML = `
             <span class="nom-ingredient">
-                <span class="qte">${ing.qte}×</span> ${objIng.nom}
+                <span class="qte">${ing.qte}×</span> ${echapper(objIng.nom)}
                 <span class="ingredient-craftable" data-ing="${ing.id}"
                       title="Voir si cet ingrédient est lui-même craftable (synergie)">🔗</span>
             </span>
@@ -503,11 +542,19 @@ function brancherEvenements() {
     $("selectMetier").addEventListener("change", (e) => {
         // On retient le nom affiché dans le menu (ex : « Bijoutier »)
         metierCourantNom = e.target.options[e.target.selectedIndex].textContent;
-        if (e.target.value) chargerRecettes(e.target.value);
+        if (!e.target.value) return;
+        // Le niveau n'est plus à ressaisir : il vient de « Mes métiers ».
+        $("niveauMetier").value = niveauDuMetier(e.target.value) || 1;
+        chargerRecettes(e.target.value);
     });
 
-    // Les filtres réaffichent sans recharger l'API
-    $("niveauMetier").addEventListener("input", afficherRecettes);
+    // Corriger le niveau ici met aussi à jour la fiche « Mes métiers » :
+    // les deux onglets ne peuvent pas se contredire.
+    $("niveauMetier").addEventListener("input", () => {
+        const jobId = $("selectMetier").value;
+        if (jobId) definirNiveauMetier(jobId, parseInt($("niveauMetier").value, 10));
+        afficherRecettes();
+    });
     $("filtreNiveau").addEventListener("change", afficherRecettes);
     $("triRentabilite").addEventListener("change", afficherRecettes);
 
@@ -766,18 +813,6 @@ function brancherPlan() {
         rafraichirPlan();
     });
 
-    // Onglets
-    document.querySelectorAll(".onglet").forEach((bouton) => {
-        bouton.addEventListener("click", () => {
-            document.querySelectorAll(".onglet").forEach((b) => b.classList.remove("actif"));
-            bouton.classList.add("actif");
-            $("vue-plan").hidden     = bouton.dataset.onglet !== "plan";
-            $("vue-recolte").hidden  = bouton.dataset.onglet !== "recolte";
-            $("vue-recettes").hidden = bouton.dataset.onglet !== "recettes";
-            $("vue-methode").hidden  = bouton.dataset.onglet !== "methode";
-        });
-    });
-
     afficherPrincipes();
     afficherSynergies();
     rafraichirPlan();
@@ -921,9 +956,21 @@ function afficherRessources() {
         </div>`;
 }
 
+// Place le sélecteur de tranche sur celle qui contient mon niveau dans ce
+// métier — plus besoin de la chercher à la main.
+function calerTrancheSurMonNiveau() {
+    const niveau = niveauDuMetier($("metierRecolte").value);
+    if (!niveau) return;
+    const tranche = TRANCHES.find((t) => niveau >= t.min && niveau <= t.max);
+    if (tranche) $("trancheRecolte").value = tranche.min + "-" + tranche.max;
+}
+
 function brancherRecolte() {
     preparerTranches();
-    $("metierRecolte").addEventListener("change", chargerRessources);
+    $("metierRecolte").addEventListener("change", () => {
+        calerTrancheSurMonNiveau();
+        chargerRessources();
+    });
     $("trancheRecolte").addEventListener("change", afficherRessources);
 }
 
@@ -1073,11 +1120,565 @@ function afficherMethode() {
 }
 
 
+
+/* ============================================================
+   12) MES MÉTIERS
+   ------------------------------------------------------------
+   La source de vérité de l'outil : le niveau de chacun de mes
+   métiers est saisi ici, une seule fois, et les autres onglets
+   viennent le lire — Rentabilité pour savoir ce que je peux
+   crafter, Optimisation pour le plan de montée et les synergies,
+   Récolte pour se caler sur ma tranche.
+   ============================================================ */
+
+// { idMetier: niveau }  —  sauvegardé dans le navigateur
+const niveauxMetiers = chargerJSON("dofus_niveaux_metiers", {});
+
+// La liste complète des métiers, telle que l'API l'a donnée.
+let tousLesMetiers = [];
+
+// Les fonctions à rappeler quand un niveau change, pour que les
+// autres onglets se mettent à jour tout seuls.
+const abonnesAuxNiveaux = [];
+
+// Le niveau d'un métier (0 = « je ne l'ai pas commencé »).
+function niveauDuMetier(idMetier) {
+    return niveauxMetiers[String(idMetier)] || 0;
+}
+
+// Le nom d'un métier à partir de son identifiant.
+function nomDuMetier(idMetier) {
+    const m = tousLesMetiers.find((x) => String(x.id) === String(idMetier));
+    return m ? loc(m.name) : "Métier #" + idMetier;
+}
+
+// Enregistre un niveau, puis prévient les autres onglets.
+function definirNiveauMetier(idMetier, niveau) {
+    const propre = Math.max(0, Math.min(200, Math.round(niveau) || 0));
+    if (propre === 0) delete niveauxMetiers[String(idMetier)];
+    else niveauxMetiers[String(idMetier)] = propre;
+
+    sauverJSON("dofus_niveaux_metiers", niveauxMetiers);
+    for (const prevenir of abonnesAuxNiveaux) prevenir();
+}
+
+// Les métiers réellement commencés, du plus haut au plus bas.
+function mesMetiersCommences() {
+    return tousLesMetiers
+        .filter((m) => niveauDuMetier(m.id) > 0)
+        .sort((a, b) => niveauDuMetier(b.id) - niveauDuMetier(a.id));
+}
+
+// Permet à un autre onglet de dire : « préviens-moi quand un niveau change ».
+function surChangementDeNiveau(fonction) {
+    abonnesAuxNiveaux.push(fonction);
+}
+
+// Appelé une fois, quand l'API a répondu avec la liste des métiers.
+function enregistrerMetiers(metiers) {
+    tousLesMetiers = metiers.slice().sort((a, b) => loc(a.name).localeCompare(loc(b.name)));
+    afficherMesMetiers();
+}
+
+function afficherMesMetiers() {
+    const conteneur = $("listeMesMetiers");
+    if (!conteneur) return;
+
+    if (!tousLesMetiers.length) {
+        conteneur.innerHTML = `<p class="message-vide">Chargement de la liste des métiers…</p>`;
+        return;
+    }
+
+    $("statMetiersCommences").textContent = mesMetiersCommences().length;
+    $("statMetiersMax").textContent =
+        tousLesMetiers.filter((m) => niveauDuMetier(m.id) >= 200).length;
+
+    conteneur.innerHTML = tousLesMetiers.map((m) => {
+        const niveau = niveauDuMetier(m.id);
+        const part = Math.round((niveau / 200) * 100);
+        return `
+            <div class="carte-metier ${niveau > 0 ? "metier-commence" : ""}">
+                <label class="metier-nom" for="niv-metier-${m.id}">${echapper(loc(m.name))}</label>
+                <div class="metier-barre" title="${part} % du chemin vers le niveau 200">
+                    <div class="metier-barre-remplie" style="width:${part}%"></div>
+                </div>
+                <input type="number" id="niv-metier-${m.id}" class="metier-niveau-input"
+                       min="0" max="200" placeholder="0"
+                       value="${niveau || ""}" data-niveau-metier="${m.id}">
+            </div>`;
+    }).join("");
+}
+
+// Met à jour la barre et les compteurs sans tout redessiner : le curseur
+// resterait sinon coincé à chaque frappe.
+function majBarreMetier(champ) {
+    const carte = champ.closest(".carte-metier");
+    const niveau = niveauDuMetier(champ.dataset.niveauMetier);
+    const part = Math.round((niveau / 200) * 100);
+    carte.querySelector(".metier-barre-remplie").style.width = part + "%";
+    carte.querySelector(".metier-barre").title = part + " % du chemin vers le niveau 200";
+    carte.classList.toggle("metier-commence", niveau > 0);
+
+    $("statMetiersCommences").textContent = mesMetiersCommences().length;
+    $("statMetiersMax").textContent =
+        tousLesMetiers.filter((m) => niveauDuMetier(m.id) >= 200).length;
+}
+
+function brancherMesMetiers() {
+    const conteneur = $("listeMesMetiers");
+    if (!conteneur) return;
+
+    conteneur.addEventListener("input", (e) => {
+        const champ = e.target.closest("[data-niveau-metier]");
+        if (!champ) return;
+        definirNiveauMetier(champ.dataset.niveauMetier, parseInt(champ.value, 10));
+        majBarreMetier(champ);
+    });
+
+    // Un niveau modifié depuis un AUTRE onglet doit se voir ici aussi —
+    // sauf pendant qu'on tape dans cet onglet-ci.
+    surChangementDeNiveau(() => {
+        const enTrainDeSaisir = document.activeElement
+            && document.activeElement.dataset
+            && document.activeElement.dataset.niveauMetier;
+        if (!enTrainDeSaisir) afficherMesMetiers();
+    });
+
+    $("resetMetiers").addEventListener("click", () => {
+        if (!confirm("Effacer tous les niveaux de métiers enregistrés ?")) return;
+        for (const cle in niveauxMetiers) delete niveauxMetiers[cle];
+        sauverJSON("dofus_niveaux_metiers", niveauxMetiers);
+        afficherMesMetiers();
+        for (const prevenir of abonnesAuxNiveaux) prevenir();
+    });
+}
+
+
+/* ============================================================
+   13) OPTIMISER MA MONTÉE
+   ------------------------------------------------------------
+   « Pour monter CE métier jusqu'au niveau X, qu'est-ce que je
+   crafte, combien de fois, avec quoi, et pour combien ? »
+
+   Le calcul d'XP lui-même vit dans xp.js (fonctions pures,
+   vérifiables par test-xp.js). Ici on va chercher les recettes,
+   on lance le calcul, et on affiche — y compris les synergies :
+   quels ingrédients je peux fabriquer moi-même plutôt que de
+   les acheter, ce que le guide appelle chaîner ses métiers.
+   ============================================================ */
+
+let planCourant = null;      // le dernier plan calculé
+let recettesPlan = [];       // les recettes du métier, au format attendu par xp.js
+let synergiesPlan = {};      // { idIngredient: { jobId, nomMetier, monNiveau, … } }
+let bornesPlan = { depart: 0, cible: 0 };
+
+// Remplit le sélecteur de métier, en affichant mon niveau à côté.
+function remplirMetiersOptimisation() {
+    const select = $("metierOptim");
+    if (!select) return;
+    const retenu = select.value;
+    select.innerHTML = `<option value="">— choisis un métier —</option>` +
+        tousLesMetiers.filter((m) => m.aDesRecettes !== false).map((m) => {
+            const niv = niveauDuMetier(m.id);
+            return `<option value="${m.id}">${echapper(loc(m.name))}` +
+                   `${niv > 0 ? " (niv. " + niv + ")" : ""}</option>`;
+        }).join("");
+    select.value = retenu;
+}
+
+// Quand on choisit un métier, on pré-remplit son niveau actuel.
+function synchroniserNiveauxOptimisation() {
+    const jobId = $("metierOptim").value;
+    if (!jobId) return;
+    const niv = niveauDuMetier(jobId);
+    $("niveauDepartOptim").value = niv;
+    const cible = parseInt($("niveauCibleOptim").value, 10) || 0;
+    if (cible <= niv) {
+        $("niveauCibleOptim").value =
+            Math.min(200, Math.max(niv + 10, Math.ceil((niv + 1) / 10) * 10));
+    }
+}
+
+async function calculerPlan() {
+    const jobId = $("metierOptim").value;
+    const zone = $("resultatOptim");
+    const depart = parseInt($("niveauDepartOptim").value, 10) || 0;
+    const cible = parseInt($("niveauCibleOptim").value, 10) || 0;
+
+    if (!jobId) {
+        zone.innerHTML = `<p class="message-vide">Choisis d'abord un métier. 👆</p>`;
+        return;
+    }
+    if (cible <= depart) {
+        zone.innerHTML = `<p class="message-vide">
+            Le niveau visé doit être plus haut que le niveau actuel.</p>`;
+        return;
+    }
+
+    // Le niveau saisi ici fait autorité : on le renvoie dans « Mes métiers ».
+    definirNiveauMetier(jobId, depart);
+
+    zone.innerHTML = `<p class="message-vide">Récupération des recettes de
+        ${echapper(nomDuMetier(jobId))}…</p>`;
+
+    try {
+        const brutes = await recupererRecettesDuMetier(jobId);
+
+        recettesPlan = brutes.map((r) => {
+            const obj = cacheObjets[r.resultId] || { nom: "?", niveau: 0, img: "" };
+            return {
+                id: r.resultId,
+                nom: obj.nom,
+                img: obj.img,
+                niveauObjet: obj.niveau || r.resultLevel || 1,
+                nbCases: (r.ingredientIds || []).length,
+                ingredients: (r.ingredientIds || []).map((id, i) => ({
+                    id: id, qte: (r.quantities || [])[i] || 1
+                }))
+            };
+        }).filter((r) => r.nbCases > 0);
+
+        if (!recettesPlan.length) {
+            zone.innerHTML = `<p class="message-vide">
+                Aucune recette exploitable trouvée pour ce métier.</p>`;
+            return;
+        }
+
+        planCourant = planDeMontee(recettesPlan, depart, cible);
+        bornesPlan = { depart, cible };
+
+        zone.innerHTML = `<p class="message-vide">Recherche des synergies avec tes autres métiers…</p>`;
+        await chercherSynergies(Object.keys(planCourant.ingredientsTotaux).map(Number));
+
+        afficherPlan(depart, cible);
+    } catch (e) {
+        console.error(e);
+        zone.innerHTML = `<p class="message-vide">
+            ❌ Erreur pendant le calcul. Vérifie ta connexion et réessaie.</p>`;
+    }
+}
+
+/* Les synergies : « puis-je fabriquer cet ingrédient moi-même ? »
+   On demande à l'API, par lots, quelles recettes produisent ces
+   ingrédients. Si le métier qui les fabrique est un des miens et que mon
+   niveau suffit, c'est une économie directe. */
+async function chercherSynergies(idsIngredients) {
+    synergiesPlan = {};
+    if (!idsIngredients.length) return;
+
+    for (let i = 0; i < idsIngredients.length; i += 40) {
+        const lot = idsIngredients.slice(i, i + 40);
+        const requete = lot.map((id) => "resultId[$in][]=" + id).join("&");
+        try {
+            const data = await appelAPI("/recipes?" + requete + "&$limit=50&lang=fr");
+            for (const r of data.data || []) {
+                if (r.resultId == null || r.jobId == null) continue;
+                if (synergiesPlan[r.resultId]) continue;   // une seule suffit
+
+                const objet = cacheObjets[r.resultId] || { niveau: 0 };
+                const monNiveau = niveauDuMetier(r.jobId);
+                synergiesPlan[r.resultId] = {
+                    jobId: r.jobId,
+                    nomMetier: nomDuMetier(r.jobId),
+                    monNiveau: monNiveau,
+                    niveauRequis: objet.niveau || 0,
+                    jePeuxLeFaire: monNiveau > 0 && monNiveau >= (objet.niveau || 0)
+                };
+            }
+        } catch (e) {
+            // Pas de synergie pour ce lot : ce n'est pas bloquant.
+            console.warn("Synergies indisponibles pour un lot", e);
+        }
+    }
+}
+
+/* Ce que coûte la montée. On réutilise le carnet de prix partagé avec
+   l'onglet Rentabilité : un prix saisi ici s'applique aussi là-bas.
+   Monter un métier n'est pas une dépense sèche — les objets produits se
+   revendent — d'où le bilan net. */
+function calculerCoutsPlan() {
+    let coutIngredients = 0, sansPrix = 0, nbIngredients = 0;
+    for (const [id, qte] of Object.entries(planCourant.ingredientsTotaux)) {
+        nbIngredients++;
+        const prixUnitaire = prix[id] || 0;
+        if (!prixUnitaire) sansPrix++;
+        coutIngredients += prixUnitaire * qte;
+    }
+
+    let revente = 0;
+    for (const palier of planCourant.paliers) {
+        revente += (prix[palier.recette.id] || 0) * palier.crafts;
+    }
+
+    const niveauxGagnes = Math.max(1, bornesPlan.cible - bornesPlan.depart);
+    return {
+        coutIngredients, revente,
+        net: coutIngredients - revente,
+        parNiveau: (coutIngredients - revente) / niveauxGagnes,
+        sansPrix, nbIngredients
+    };
+}
+
+// Recalcule les montants sans redessiner : les champs gardent le focus.
+function rafraichirCoutsPlan() {
+    if (!planCourant) return;
+    const c = calculerCoutsPlan();
+
+    const ecrire = (cle, texte) => {
+        const el = document.querySelector(`[data-cout="${cle}"]`);
+        if (el) el.textContent = texte;
+    };
+    ecrire("ingredients", formaterNombre(c.coutIngredients) + " k");
+    ecrire("revente", "− " + formaterNombre(c.revente) + " k");
+    // Un total négatif est un gain : autant l'écrire en toutes lettres
+    // plutôt que de laisser lire un « moins » ambigu.
+    ecrire("net", c.net <= 0 ? formaterNombre(-c.net) + " k gagnés"
+                             : formaterNombre(c.net) + " k à sortir");
+    ecrire("parNiveau", c.parNiveau <= 0 ? formaterNombre(-c.parNiveau) + " k gagnés"
+                                         : formaterNombre(c.parNiveau) + " k");
+
+    const elNet = document.querySelector('[data-cout="net"]');
+    if (elNet) {
+        elNet.classList.toggle("profit-positif", c.net <= 0);
+        elNet.classList.toggle("profit-negatif", c.net > 0);
+    }
+
+    const alerte = $("alertePrix");
+    if (alerte) {
+        alerte.innerHTML = c.sansPrix > 0
+            ? `⚠️ ${c.sansPrix} ingrédient(s) sur ${c.nbIngredients} n'ont pas encore de
+               prix : le total ci-dessus est <strong>incomplet</strong>.`
+            : `✅ Tous les ingrédients ont un prix : le total est complet.`;
+        alerte.className = c.sansPrix > 0 ? "avertissement" : "diagnostic diag-ok";
+    }
+
+    for (const [id, qte] of Object.entries(planCourant.ingredientsTotaux)) {
+        const el = document.querySelector(`[data-sous-total="${id}"]`);
+        if (el) el.textContent = formaterNombre((prix[id] || 0) * qte) + " k";
+    }
+    for (const palier of planCourant.paliers) {
+        const el = document.querySelector(`[data-revente-plan="${palier.recette.id}"]`);
+        if (el) el.textContent = formaterNombre((prix[palier.recette.id] || 0) * palier.crafts) + " k";
+    }
+}
+
+function afficherPlan(depart, cible) {
+    const p = planCourant;
+    const nomMetier = nomDuMetier($("metierOptim").value);
+
+    const resume = `
+        <div class="tableau-bord">
+            <div class="carte-stat">
+                <span class="stat-valeur">${formaterNombre(p.totalCrafts)}</span>
+                <span class="stat-label">crafts au total</span>
+            </div>
+            <div class="carte-stat">
+                <span class="stat-valeur">${formaterNombre(p.xpTotale)}</span>
+                <span class="stat-label">XP à gagner</span>
+            </div>
+            <div class="carte-stat">
+                <span class="stat-valeur">${p.paliers.length}</span>
+                <span class="stat-label">changements de recette</span>
+            </div>
+        </div>`;
+
+    const alerte = p.niveauxSansRecette > 0 ? `
+        <div class="avertissement">
+            ⚠️ Sur ${p.niveauxSansRecette} niveau(x) de ce parcours, aucune recette de
+            ${echapper(nomMetier)} n'est réalisable (recette trop grande pour tes cases,
+            ou niveau non couvert). Ces niveaux ne sont pas comptés ci-dessus.
+        </div>` : "";
+
+    const paliers = p.paliers.map((pal, i) => `
+        <div class="palier-plan">
+            <div class="plan-numero">${i + 1}</div>
+            <div class="plan-corps">
+                <div class="plan-niveaux">Du niveau ${pal.deNiveau} au niveau ${pal.auNiveau}</div>
+                <div class="plan-recette">
+                    ${pal.recette.img ? `<img src="${echapper(pal.recette.img)}" alt="" loading="lazy">`
+                                      : `<div class="sans-img"></div>`}
+                    <div>
+                        <div class="plan-objet">${echapper(pal.recette.nom)}</div>
+                        <div class="plan-detail">
+                            objet niveau ${pal.recette.niveauObjet} ·
+                            ${pal.recette.nbCases} case(s) ·
+                            ${formaterNombre(pal.xpParCraft)} XP par craft
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="plan-crafts">
+                <span class="plan-nombre">${formaterNombre(pal.crafts)}</span>
+                <span class="stat-label">crafts</span>
+            </div>
+            <div class="plan-revente">
+                <label>Prix de vente unitaire</label>
+                <input type="number" class="prix-input" min="0" placeholder="0"
+                       value="${prix[pal.recette.id] || ""}" data-prix-objet="${pal.recette.id}">
+                <span class="revente-totale">
+                    revente : <strong data-revente-plan="${pal.recette.id}">0 k</strong>
+                </span>
+            </div>
+        </div>`).join("");
+
+    const courses = Object.entries(p.ingredientsTotaux)
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, qte]) => {
+            const obj = cacheObjets[id] || { nom: "Objet #" + id, img: "" };
+            const syn = synergiesPlan[id];
+
+            let note = `<span class="syn-neutre">à récolter, acheter ou dropper</span>`;
+            if (syn && syn.jePeuxLeFaire) {
+                note = `<span class="syn-oui">✅ tu peux le fabriquer :
+                    ${echapper(syn.nomMetier)} (ton niv. ${syn.monNiveau})</span>`;
+            } else if (syn && syn.monNiveau > 0) {
+                note = `<span class="syn-presque">⏳ ${echapper(syn.nomMetier)} le fabrique —
+                    il te faut le niveau ${syn.niveauRequis} (tu es ${syn.monNiveau})</span>`;
+            } else if (syn) {
+                note = `<span class="syn-non">💡 fabriqué par ${echapper(syn.nomMetier)} —
+                    un métier que tu n'as pas encore</span>`;
+            }
+
+            return `
+                <div class="ligne-course">
+                    ${obj.img ? `<img src="${echapper(obj.img)}" alt="" loading="lazy">`
+                              : `<div class="sans-img"></div>`}
+                    <div class="course-infos">
+                        <div class="course-nom">${echapper(obj.nom)}</div>
+                        <div class="course-synergie">${note}</div>
+                        <div class="course-prix">
+                            <span class="course-qte">${formaterNombre(qte)} ×</span>
+                            <input type="number" class="prix-input" min="0" placeholder="prix u."
+                                   value="${prix[id] || ""}" data-prix-objet="${id}">
+                            <span class="course-sous-total">
+                                = <strong data-sous-total="${id}">0 k</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>`;
+        }).join("");
+
+    const nbFabricables = Object.values(synergiesPlan).filter((s) => s.jePeuxLeFaire).length;
+
+    $("resultatOptim").innerHTML = `
+        <h3 class="titre-plan">Plan de montée — ${echapper(nomMetier)} :
+            niveau ${depart} → ${cible}</h3>
+        ${resume}
+        ${alerte}
+
+        <div class="bloc">
+            <h2>🪜 Ce que tu crafts, palier par palier</h2>
+            <p class="explication">
+                À chaque niveau, l'outil retient la recette qui rapporte le plus d'XP parmi
+                celles que tu peux réellement réaliser. Les niveaux qui utilisent la même
+                recette sont regroupés.
+            </p>
+            ${paliers || `<p class="message-vide">Aucun palier réalisable.</p>`}
+        </div>
+
+        <div class="bloc">
+            <h2>💸 Ce que va te coûter cette montée</h2>
+            <p class="explication">
+                Les prix viennent du <strong>carnet partagé</strong> avec l'onglet
+                Rentabilité. Monter un métier n'est pas une dépense sèche — les objets
+                craftés se revendent, d'où le <strong>bilan net</strong>.
+            </p>
+            <div class="grille-couts">
+                <div class="ligne-cout">
+                    <span>Ingrédients à acheter</span>
+                    <span class="valeur" data-cout="ingredients">0 k</span>
+                </div>
+                <div class="ligne-cout">
+                    <span>Revente des objets craftés</span>
+                    <span class="valeur" data-cout="revente">− 0 k</span>
+                </div>
+                <div class="ligne-cout ligne-cout-total">
+                    <span>Bilan net de la montée</span>
+                    <span class="valeur" data-cout="net">0 k</span>
+                </div>
+                <div class="ligne-cout">
+                    <span>Par niveau gagné</span>
+                    <span class="valeur" data-cout="parNiveau">0 k</span>
+                </div>
+            </div>
+            <p id="alertePrix" class="avertissement"></p>
+            <p class="petite-note">
+                💡 Le guide le rappelle : une montée coûteuse peut rester la bonne
+                décision si le palier atteint ouvre un produit vendable en continu.
+            </p>
+        </div>
+
+        <div class="bloc">
+            <h2>🛒 Tout ce qu'il te faut réunir</h2>
+            <p class="explication">
+                Le total des ingrédients pour l'ensemble du parcours.
+                ${nbFabricables > 0
+                    ? `<strong>${nbFabricables}</strong> d'entre eux sont fabricables par tes
+                       propres métiers : autant d'achats en moins.`
+                    : `Aucun n'est fabricable par tes métiers actuels — renseigne tes niveaux
+                       dans « Mes métiers » pour faire apparaître les synergies.`}
+            </p>
+            <div class="liste-courses">${courses || ""}</div>
+        </div>`;
+
+    rafraichirCoutsPlan();
+}
+
+function brancherOptimisation() {
+    if (!$("metierOptim")) return;
+
+    $("metierOptim").addEventListener("change", synchroniserNiveauxOptimisation);
+    $("calculerPlan").addEventListener("click", calculerPlan);
+
+    // Saisie d'un prix : on met à jour le carnet partagé, puis on recalcule
+    // les montants (sans redessiner, pour garder le focus).
+    $("resultatOptim").addEventListener("input", (e) => {
+        const champ = e.target.closest("[data-prix-objet]");
+        if (!champ) return;
+        prix[parseInt(champ.dataset.prixObjet, 10)] = parseFloat(champ.value) || 0;
+        sauverJSON("dofus_prix", prix);
+        rafraichirCoutsPlan();
+    });
+
+    surChangementDeNiveau(remplirMetiersOptimisation);
+}
+
+
+/* ============================================================
+   14) LES ONGLETS
+   ============================================================ */
+
+function activerOnglet(nom) {
+    document.querySelectorAll(".onglet").forEach((b) =>
+        b.classList.toggle("actif", b.dataset.onglet === nom));
+    document.querySelectorAll(".vue").forEach((v) =>
+        { v.hidden = v.dataset.vue !== nom; });
+    localStorage.setItem("dofus_onglet", nom);
+
+    // Un prix saisi dans l'onglet Optimisation appartient au même carnet :
+    // on redessine les recettes pour qu'il s'affiche ici aussi.
+    if (nom === "recettes" && recettesCourantes.length) afficherRecettes();
+}
+
+function brancherOnglets() {
+    document.querySelectorAll(".onglet").forEach((bouton) => {
+        bouton.addEventListener("click", () => activerOnglet(bouton.dataset.onglet));
+    });
+    // On rouvre l'outil sur le dernier onglet consulté.
+    const dernier = localStorage.getItem("dofus_onglet");
+    const existe = dernier && document.querySelector(`.onglet[data-onglet="${dernier}"]`);
+    activerOnglet(existe ? dernier : "recettes");
+}
+
+
 /* ============================================================
    8) DÉMARRAGE
    ============================================================ */
 
+brancherOnglets();
 brancherEvenements();
+brancherMesMetiers();
+brancherOptimisation();
 brancherPlan();
 brancherRecolte();
 afficherMethode();

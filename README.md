@@ -8,7 +8,42 @@ crafter** à chaque instant.
 Les recettes sont récupérées **en direct** depuis l'API publique de
 [DofusDB](https://dofusdb.fr/) (`api.dofusdb.fr`) : rien n'est stocké en dur, tout est à jour.
 
-## Les quatre onglets
+## Les six onglets
+
+L'onglet ouvert est mémorisé d'une visite à l'autre.
+
+### 🛠️ Mes métiers
+Le niveau de chacun de tes métiers, saisi **une seule fois**. C'est la source de vérité de
+tout l'outil : les autres onglets viennent lire ces niveaux plutôt que de te les redemander.
+Corriger un niveau depuis l'onglet Rentabilité met aussi la fiche à jour — les deux ne
+peuvent pas se contredire.
+
+### 📈 Optimiser ma montée
+Répond à **« combien de crafts pour monter ce métier ? »**. L'outil parcourt le métier
+niveau par niveau, retient à chaque niveau la recette qui rapporte le plus d'XP parmi
+celles que tu peux **réellement** réaliser, et produit :
+
+- le plan **palier par palier** — « du niveau 48 au 55 : 13 × Amulette Dragodinde » ;
+- le **nombre total de crafts** et l'XP à gagner ;
+- la **liste de courses** : tous les ingrédients et leurs quantités cumulées ;
+- les **synergies** : quels ingrédients tu peux fabriquer toi-même avec tes autres métiers,
+  lesquels demandent encore quelques niveaux, lesquels sont à acheter ;
+- le **chiffrage** : coût des ingrédients, revente des objets craftés, **bilan net** et coût
+  par niveau. Monter un métier n'est pas une dépense sèche — la revente peut tout financer.
+
+**D'où viennent les chiffres d'XP.** Ankama ne publie pas de formule ; ces règles viennent
+des relevés de la communauté :
+
+| Règle | Valeur |
+|---|---|
+| Coût d'un niveau de métier | 20 × le niveau |
+| Craft d'un objet à ton niveau | 20 × le niveau de l'objet (= un niveau gagné en un craft) |
+| Pénalité d'écart de niveau | ~90 % à 1 niveau, 75 % à 3, 50 % à 8, 25 % à 22, 10 % à 55 |
+| Cases d'ingrédients débloquées | 2 au niv. 1, 3 au niv. 10, 4 au niv. 20, puis +1 tous les 20 |
+
+Elles sont regroupées **en haut de `xp.js`** pour rester faciles à ajuster si tu constates un
+écart en jeu. Pour les revérifier : `node test-xp.js`, ou `lancerTestsXp()` dans la console
+du navigateur (F12) si tu n'as pas Node.
 
 ### 📋 Feuille de route
 Un parcours en **7 phases**, débloquées par la **trésorerie** plutôt que par le niveau :

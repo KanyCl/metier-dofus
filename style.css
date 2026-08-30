@@ -753,3 +753,245 @@ code {
 /* ---------- Bloc source ---------- */
 .source { border-left: 3px solid var(--bleu); }
 .source p { font-size: 0.86rem; color: var(--texte-doux); }
+
+/* ============================================================
+   ONGLET « MES MÉTIERS »
+   ============================================================ */
+
+.grille-metiers {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+.carte-metier {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "nom niveau" "barre niveau";
+    align-items: center;
+    gap: 4px 12px;
+    background: var(--fond-carte2);
+    border: 1px solid var(--bordure);
+    border-left: 3px solid var(--bordure);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+.carte-metier.metier-commence { border-left-color: var(--vert); }
+
+.metier-nom {
+    grid-area: nom;
+    font-weight: bold;
+    font-size: 0.92rem;
+    color: var(--texte-doux);
+    cursor: pointer;
+}
+.metier-commence .metier-nom { color: var(--bleu); }
+
+.metier-barre {
+    grid-area: barre;
+    height: 5px;
+    background: var(--fond-carte);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.metier-barre-remplie {
+    height: 100%;
+    background: var(--vert);
+    border-radius: 3px;
+    transition: width 0.2s;
+}
+.metier-niveau-input {
+    grid-area: niveau;
+    width: 72px;
+    min-width: 72px;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* ============================================================
+   ONGLET « OPTIMISER MA MONTÉE »
+   ============================================================ */
+
+.bouton-principal {
+    background: var(--bleu);
+    color: #11111b;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.92rem;
+}
+.bouton-principal:hover { filter: brightness(1.1); }
+
+.titre-plan {
+    text-align: center;
+    color: var(--violet);
+    margin: 24px 0 4px;
+    font-size: 1.15rem;
+}
+
+/* ---------- Les paliers de montée ---------- */
+.palier-plan {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    background: var(--fond-carte2);
+    border: 1px solid var(--bordure);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+.plan-numero {
+    background: var(--violet);
+    color: #11111b;
+    font-weight: bold;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+.plan-niveaux {
+    font-size: 0.78rem;
+    color: var(--jaune);
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+.plan-recette { display: flex; align-items: center; gap: 10px; }
+.plan-recette img, .plan-recette .sans-img {
+    width: 38px; height: 38px;
+    background: var(--fond-carte);
+    border-radius: 6px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.plan-objet { font-weight: bold; color: var(--bleu); font-size: 0.93rem; }
+.plan-detail { font-size: 0.76rem; color: var(--texte-doux); }
+
+.plan-crafts { text-align: center; min-width: 70px; }
+.plan-nombre {
+    display: block;
+    font-size: 1.45rem;
+    font-weight: bold;
+    color: var(--vert);
+}
+
+/* ---------- La liste de courses ---------- */
+.liste-courses {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+.ligne-course {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--fond-carte2);
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.ligne-course img, .ligne-course .sans-img {
+    width: 34px; height: 34px;
+    background: var(--fond-carte);
+    border-radius: 6px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.course-infos { flex: 1; min-width: 0; }
+.course-nom { font-weight: bold; font-size: 0.87rem; color: var(--texte); }
+.course-synergie { font-size: 0.73rem; margin-top: 2px; }
+.course-qte {
+    font-weight: bold;
+    font-size: 1.05rem;
+    color: var(--jaune);
+    flex-shrink: 0;
+}
+
+.syn-oui     { color: var(--vert); }
+.syn-presque { color: var(--orange); }
+.syn-non     { color: var(--violet); }
+.syn-neutre  { color: var(--texte-doux); }
+
+/* ---------- Les règles de calcul ---------- */
+.liste-regles {
+    font-size: 0.87rem;
+    color: var(--texte-doux);
+    padding-left: 20px;
+    margin: 8px 0;
+}
+.liste-regles li { margin-bottom: 8px; }
+.liste-regles strong { color: var(--texte); }
+
+@media (max-width: 600px) {
+    .grille-metiers, .liste-courses { grid-template-columns: 1fr; }
+    .palier-plan { grid-template-columns: auto 1fr; }
+    .plan-crafts { grid-column: 2; text-align: left; }
+}
+
+/* ---------- Le chiffrage de la montée ---------- */
+.grille-couts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 12px 0;
+}
+.ligne-cout {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: var(--fond-carte2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+}
+.ligne-cout .valeur { font-weight: bold; font-size: 1.05rem; }
+.ligne-cout-total {
+    border: 1px solid var(--bleu);
+    margin-top: 6px;
+}
+.ligne-cout-total span:first-child { font-weight: bold; color: var(--texte); }
+.ligne-cout-total .valeur { font-size: 1.3rem; }
+
+/* ---------- Prix dans la liste de courses ---------- */
+.course-prix {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.8rem;
+}
+.course-prix .course-qte {
+    color: var(--jaune);
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+.course-prix .prix-input { width: 78px; min-width: 78px; }
+.course-sous-total { color: var(--texte-doux); white-space: nowrap; }
+.course-sous-total strong { color: var(--texte); }
+
+/* ---------- Revente dans les paliers ---------- */
+.plan-revente {
+    grid-column: 2 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    color: var(--texte-doux);
+    border-top: 1px dashed var(--bordure);
+    padding-top: 8px;
+    margin-top: 2px;
+}
+.plan-revente label { font-weight: bold; }
+.plan-revente .prix-input { width: 78px; min-width: 78px; }
+.revente-totale strong { color: var(--vert); }
+
+@media (max-width: 600px) {
+    .plan-revente { grid-column: 1 / -1; }
+    .ligne-cout { flex-direction: column; align-items: flex-start; gap: 2px; }
+}

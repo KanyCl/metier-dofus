@@ -17,14 +17,18 @@ compiler, tout doit tourner dans un navigateur. Les données de jeu viennent en
 direct de l'API publique **DofusDB** (`api.dofusdb.fr`), les données personnelles
 (prix, ventes, progression, notes) restent dans le `localStorage` du navigateur.
 
-## Les quatre onglets
+## Les six onglets
 
 | Onglet | Ce qu'il répond |
 |---|---|
+| ⚒️ Recettes & rentabilité | Ce craft mérite-t-il mes kamas ? *(onglet d'accueil)* |
+| 📈 Optimiser ma montée | Combien de crafts pour monter, avec quoi, pour combien ? |
+| 🛠️ Mes métiers | Où j'en suis — **la source de vérité de tout l'outil** |
 | 📋 Feuille de route | Dans quel ordre monter quoi, et avec quel capital |
 | 🌾 Que récolter | À mon niveau, quelle ressource rapporte le plus d'XP |
-| ⚒️ Recettes & rentabilité | Ce craft mérite-t-il mes kamas ? |
 | 🧭 La méthode | Pourquoi, les paliers, les synergies, la tier list |
+
+L'onglet ouvert est mémorisé d'une visite à l'autre.
 
 ## Les fichiers
 
@@ -36,9 +40,13 @@ direct de l'API publique **DofusDB** (`api.dofusdb.fr`), les données personnell
 | `feuille-route.js` | **données** : principes, phases, investissements passifs, synergies |
 | `methode.js` | **données** : ratios, paliers par métier, tier list, socles du profit, événements |
 | `recolte.js` | **données** : métiers de récolte, tranches de niveau, pistes d'API |
+| `xp.js` | **règles de calcul** de l'XP métier — fonctions pures, aucune dépendance |
+| `test-xp.js` | contrôle de `xp.js` — `node test-xp.js`, ou `lancerTestsXp()` en console |
 
-Règle de rangement : `app.js` ne contient aucune donnée de jeu, les trois autres
-`.js` ne contiennent aucune logique.
+Règle de rangement : `app.js` ne contient aucune donnée de jeu, les fichiers de
+données ne contiennent aucune logique. `xp.js` fait exception assumée : il porte
+des **règles** (des formules), pas des données ni de l'affichage — il est isolé
+précisément pour pouvoir être vérifié tout seul par `test-xp.js`.
 
 ## 30 août 2026 — intégration du guide DAIGO
 
@@ -126,3 +134,66 @@ Les niveaux et les montants sont des **repères de marché**, pas des règles du
 ils dépendent du serveur et de la date. Le guide le dit lui-même — il ne donne
 volontairement aucune « recette miracle », parce qu'une recette rentable partagée
 cesse d'être rentable.
+
+## 30 août 2026 — les niveaux de métiers pilotent l'outil
+
+Jusqu'ici, le niveau de métier se ressaisissait dans chaque onglet et ne servait
+qu'à filtrer les recettes. Il devient la **donnée centrale**.
+
+### Nouvel onglet 🛠️ Mes métiers
+Le niveau de chaque métier, saisi **une seule fois**
+(`localStorage: dofus_niveaux_metiers`). Les autres onglets s'y abonnent :
+Rentabilité pré-remplit son niveau, Récolte cale sa tranche, Optimisation en fait
+le point de départ du plan. Corriger le niveau depuis Rentabilité mettra aussi la
+fiche à jour : les deux onglets ne peuvent pas se contredire.
+
+### Nouvel onglet 📈 Optimiser ma montée
+Répond à « combien de crafts pour monter ce métier ? ». L'outil parcourt le métier
+**niveau par niveau**, retient à chaque niveau la recette qui rapporte le plus
+d'XP parmi celles réellement réalisables, regroupe les niveaux consécutifs qui
+partagent la même recette, et produit :
+
+- le plan **palier par palier** (« du niveau 48 au 55 : 13 × Amulette Dragodinde ») ;
+- le **nombre total de crafts** et l'XP à gagner ;
+- la **liste de courses** : tous les ingrédients et leurs quantités cumulées ;
+- les **synergies** — quels ingrédients sont fabricables par mes autres métiers,
+  lesquels demandent encore des niveaux, lesquels sont à acheter. C'est le
+  chaînage des métiers de la méthode, appliqué à un parcours concret ;
+- le **chiffrage** : coût des ingrédients, revente des objets craftés, **bilan
+  net** et coût par niveau. Les prix se saisissent sur place et alimentent le
+  carnet partagé avec l'onglet Rentabilité.
+
+### Le moteur d'XP (`xp.js`)
+Ankama ne publie aucune formule ; ces règles viennent des relevés de la communauté
+et sont regroupées en haut du fichier pour rester ajustables :
+
+| Règle | Valeur |
+|---|---|
+| Coût d'un niveau de métier | 20 × le niveau |
+| Craft d'un objet à son niveau | 20 × le niveau de l'objet (= un niveau gagné) |
+| Pénalité d'écart | ~90 % à 1 niveau, 75 % à 3, 50 % à 8, 25 % à 22, 10 % à 55 |
+| Cases d'ingrédients | 2 au niv. 1, 3 au niv. 10, 4 au niv. 20, puis +1 tous les 20 |
+
+Vérifié sur l'exemple de référence de la communauté (objet niveau 40 : 800 XP à
+niveau égal, ~400 à 8 niveaux d'écart, 200 à 22). ✅
+
+Conséquence sur l'onglet Rentabilité : « crafts de mon niveau » tient désormais
+compte des **cases débloquées** — une recette 5 cases n'est plus annoncée comme
+réalisable à un niveau qui n'en ouvre que 4. Un tri **XP par craft** a été ajouté,
+et chaque carte affiche l'XP qu'elle rapporte à mon niveau.
+
+### Au passage
+- `echapper()` neutralise le HTML des noms venus de l'API avant tout `innerHTML` ;
+- `recupererRecettesDuMetier()` est partagé par les deux onglets qui en ont besoin ;
+- la bascule d'onglets est devenue générique (`data-vue`) au lieu d'énumérer
+  chaque vue à la main — les nouveaux onglets n'ont rien demandé de plus ;
+- ⚠️ les classes CSS du plan de montée sont préfixées `plan-` : `.palier` et
+  `.palier-corps` étaient **déjà pris** par la frise de l'onglet Méthode.
+
+### Vérification
+Trois séries, passées dans Chromium :
+`test-xp.js` (19 contrôles du moteur), les nouveaux onglets (23 contrôles : saisie
+des niveaux, report sur les autres onglets, plan, synergies, chiffrage, partage du
+carnet de prix, échappement HTML), et une **non-régression** des quatre onglets
+d'origine (7 phases / 27 étapes / 11 investissements / 8 métiers / 6 couples /
+5 socles, bascule des 6 onglets, zéro erreur JS).
