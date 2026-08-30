@@ -23,6 +23,7 @@
         <button class="onglet actif" data-onglet="plan">📋 Feuille de route</button>
         <button class="onglet" data-onglet="recolte">🌾 Que récolter</button>
         <button class="onglet" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
+        <button class="onglet" data-onglet="methode">🧭 La méthode</button>
     </nav>
 
     <!-- ============================================================
@@ -157,6 +158,39 @@
          ============================================================ -->
     <section id="vue-recettes" class="vue" hidden>
 
+        <div class="bloc encart-ratios">
+            <h2>📊 Lire les chiffres correctement</h2>
+            <p class="explication">
+                <strong>Ne juge jamais un craft sur sa marge seule.</strong> Un objet à 80 % de marge
+                qui part une fois par semaine perd contre un objet à 20 % qui part 50 fois par jour.
+                Renseigne, sur chaque carte, la quantité vendue en HDV <strong>sur les 30 derniers
+                jours</strong> : l'outil en déduit les deux indicateurs qui comptent.
+            </p>
+            <div class="grille-ratios">
+                <div class="carte-ratio">
+                    <div class="ratio-nom">Marge journalière</div>
+                    <div class="ratio-formule">marge en kamas × ventes par jour</div>
+                    <div class="ratio-texte">
+                        Ce que l'objet peut te rapporter par jour, en brut. Le chiffre le plus
+                        important. C'est lui qui dit si un craft vaut ton temps.
+                    </div>
+                </div>
+                <div class="carte-ratio">
+                    <div class="ratio-nom">Indice de profitabilité</div>
+                    <div class="ratio-formule">ventes par jour × marge en %</div>
+                    <div class="ratio-texte">
+                        Il départage deux objets à marge journalière proche : le plus élevé rapporte
+                        autant en immobilisant moins de kamas.
+                    </div>
+                </div>
+            </div>
+            <p class="petite-note">
+                💡 Deux règles de compensation : plus ta marge en % est grande, plus tu peux tolérer
+                un petit volume — et inversement. Et plus un objet monte en niveau, plus son volume
+                de ventes baisse, sauf aux paliers très joués (60, 110, 150, 190+).
+            </p>
+        </div>
+
         <div class="barre-outils">
             <div class="champ">
                 <label for="selectMetier">Métier</label>
@@ -190,9 +224,12 @@
                 <select id="triRentabilite">
                     <option value="niveau-asc">Niveau croissant ↑</option>
                     <option value="niveau-desc">Niveau décroissant ↓</option>
-                    <option value="profit">Profit (le + rentable)</option>
+                    <option value="marge-jour">Marge journalière (le + gros potentiel)</option>
+                    <option value="indice">Indice de profitabilité</option>
+                    <option value="profit">Profit par craft</option>
                     <option value="cout">Coût de craft (le - cher)</option>
                 </select>
+                <small>Les deux premiers ont besoin du nombre de ventes sur 30 jours.</small>
             </div>
         </div>
 
@@ -236,6 +273,117 @@
         </div>
     </section>
 
+    <!-- ============================================================
+         VUE : LA MÉTHODE
+         ============================================================ -->
+    <section id="vue-methode" class="vue" hidden>
+
+        <div class="bloc">
+            <h2>🧭 La méthode en une phrase</h2>
+            <p class="explication">
+                Monter ses métiers, c'est monter une petite entreprise de production : il y a une
+                logistique, un marché, une offre et une demande. Tout ce qui suit sert à répondre à
+                une seule question — <strong>où mettre mes kamas et mon temps, maintenant ?</strong>
+            </p>
+        </div>
+
+        <!-- ---------- Les pièges ---------- -->
+        <div class="bloc">
+            <h2>⚠️ Les deux pièges</h2>
+            <div id="listePieges" class="grille-principes"></div>
+        </div>
+
+        <!-- ---------- Les ratios ---------- -->
+        <div class="bloc">
+            <h2>📊 Comment choisir quoi fabriquer</h2>
+            <div id="listeRatios" class="grille-principes"></div>
+        </div>
+
+        <!-- ---------- Les paliers métier par métier ---------- -->
+        <div class="bloc">
+            <h2>📈 Les paliers, métier par métier</h2>
+            <p class="explication">
+                Un métier ne progresse pas de façon linéaire. Certains niveaux débloquent d'un coup
+                un craft rentable, ou un craft qui ne vaut rien à la revente mais donne beaucoup
+                d'XP pour presque rien. <strong>On vise le palier, pas le niveau suivant.</strong>
+            </p>
+            <div id="listePaliers"></div>
+        </div>
+
+        <!-- ---------- Les synergies chiffrées ---------- -->
+        <div class="bloc">
+            <h2>🔗 Les synergies, avec les niveaux exacts</h2>
+            <p class="explication">
+                Ce ne sont pas des affinités vagues : ce sont des écarts de niveaux à maintenir
+                entre deux métiers pour que l'un fabrique gratuitement ce dont l'autre a besoin.
+            </p>
+            <div id="listeCouples"></div>
+        </div>
+
+        <!-- ---------- La tier list ---------- -->
+        <div class="bloc">
+            <h2>🏆 La tier list</h2>
+            <p class="explication">
+                Classement pour un joueur qui <strong>part de zéro kama</strong>. Avec un gros
+                capital de départ, il ne tient plus. Quatre critères :
+            </p>
+            <div id="listeCriteres" class="grille-criteres"></div>
+            <div id="listeTierlist"></div>
+            <p class="petite-note" id="noteTierlist"></p>
+            <div id="metierEcarte" class="encart-attention"></div>
+        </div>
+
+        <!-- ---------- D'où vient le profit ---------- -->
+        <div class="bloc">
+            <h2>💡 D'où vient le profit</h2>
+            <p class="explication">
+                Comprendre ça évite de chercher une recette miracle : une recette rentable partagée
+                cesse de l'être. Ce qui dure, c'est le mécanisme.
+            </p>
+            <div id="listeSocles"></div>
+        </div>
+
+        <!-- ---------- Diversification ---------- -->
+        <div class="bloc">
+            <h2>🧺 Répartir son capital</h2>
+            <div id="regleTresorerie"></div>
+            <p class="explication" id="conditionDiversification"></p>
+            <div id="listeHdv" class="grille-hdv"></div>
+        </div>
+
+        <!-- ---------- Événements ---------- -->
+        <div class="bloc">
+            <h2>📅 Ce qui fait bouger les prix</h2>
+            <div id="listeEvenements"></div>
+            <div id="actualisationPrix" class="encart-attention"></div>
+        </div>
+
+        <div class="bloc">
+            <h2>🧮 Vérifier avant de lancer une série</h2>
+            <p class="explication">
+                L'XP de craft est <strong>dégressive</strong> sur Dofus 3 : un craft niveau 60
+                rapporte beaucoup moins d'XP quand tu es niveau 80.
+            </p>
+            <p>
+                <a href="https://dofusdb.fr/fr/tools/jobs-xp" target="_blank" rel="noopener">
+                    Ouvrir le calculateur XP métiers de DofusDB ↗
+                </a>
+            </p>
+        </div>
+
+        <div class="bloc source">
+            <h2>📚 Source</h2>
+            <p>
+                La méthode encodée dans cet onglet et dans la feuille de route vient du guide
+                <strong>« 0 à 200 FULL MÉTIERS — GUIDE DOFUS 3 »</strong> de
+                <a href="https://youtu.be/u2eHffxtrBw" target="_blank" rel="noopener">DAIGO</a>.
+                Les niveaux et montants sont des repères de marché : ils dépendent des prix de ton
+                serveur, et de la date.
+            </p>
+        </div>
+
+    </section>
+
     <!-- ===================== PIED DE PAGE ===================== -->
     <footer>
         <p>
@@ -250,6 +398,7 @@
     </footer>
 
     <script src="feuille-route.js"></script>
+    <script src="methode.js"></script>
     <script src="recolte.js"></script>
     <script src="app.js"></script>
 </body>

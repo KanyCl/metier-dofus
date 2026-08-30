@@ -17,6 +17,7 @@ const cacheObjets = {};       // { idObjet: { nom, niveau, img } }  → évite d
 
 // ---- Sauvegardes persistantes (restent d'une session à l'autre) ----
 const prix = chargerJSON("dofus_prix", {});            // { idObjet: prixUnitaireEnKamas }
+const ventes = chargerJSON("dofus_ventes", {});        // { idObjet: quantitéVendueSur30Jours }
 let benefices = chargerJSON("dofus_benefices", {       // suivi global des gains
     totalProfit: 0,
     totalCrafts: 0
@@ -251,6 +252,8 @@ function afficherRecettes() {
 
     // Tri
     liste.sort((a, b) => {
+        if (tri === "marge-jour") return b.margeJour - a.margeJour;
+        if (tri === "indice")     return b.indice - a.indice;
         if (tri === "profit") return b.profit - a.profit;
         if (tri === "cout")   return a.cout - b.cout;
         // Tri par niveau de l'objet : croissant (du + bas au + haut)
@@ -290,7 +293,30 @@ function calculerRentabilite(recette) {
     });
     const prixVente = prix[recette.resultId] || 0;
     const profit = prixVente - cout;
-    return { cout, prixVente, profit, ingredients };
+    return { cout, prixVente, profit, ingredients, ...calculerRatios(recette.resultId, profit, prixVente) };
+}
+
+/* Les deux indicateurs qui décident de tout (voir methode.js).
+   La marge seule ne veut rien dire : c'est elle CROISÉE avec la vitesse
+   de vente qui dit si un craft mérite tes kamas et ton temps.
+
+   - marge journalière  = marge en kamas × ventes par jour → le potentiel brut
+   - indice de profitab. = ventes par jour × marge en %     → le rendement du capital
+
+   La quantité saisie est celle des 30 derniers jours : on divise par 30 plutôt
+   que de lire les dernières 24 h, qui fluctuent trop pour servir de base. */
+function calculerRatios(idResultat, profit, prixVente) {
+    const ventes30 = ventes[idResultat] || 0;
+    const ventesJour = ventes30 / 30;
+    // Marge exprimée en pourcentage du prix de vente.
+    const margePct = prixVente > 0 ? (profit / prixVente) * 100 : 0;
+    return {
+        ventes30,
+        ventesJour,
+        margePct,
+        margeJour: profit * ventesJour,
+        indice: ventesJour * margePct
+    };
 }
 
 // Construit la carte HTML d'une recette.
@@ -360,6 +386,34 @@ function creerCarteRecette(x, monNiveau) {
             <span class="valeur ${x.profit >= 0 ? "profit-positif" : "profit-negatif"}" data-profit>
                 ${formaterNombre(x.profit)} k
             </span>
+        </div>
+        <div class="ligne-calcul ligne-marge-pct">
+            <span>Marge en % du prix de vente</span>
+            <span class="valeur">${x.prixVente > 0 ? Math.round(x.margePct) + " %" : "–"}</span>
+        </div>
+        <div class="prix-vente-ligne">
+            <span title="Relève-la en HDV : quantité vendue sur les 30 derniers jours">
+                Vendus sur 30 jours
+            </span>
+            <input type="number" class="prix-input" min="0" value="${x.ventes30 || ""}"
+                   data-ventes-objet="${recette.resultId}" placeholder="0">
+        </div>
+        <div class="ratios ${x.ventes30 ? "" : "ratios-vides"}">
+            <div class="ligne-calcul">
+                <span>Marge journalière</span>
+                <span class="valeur ${x.margeJour >= 0 ? "profit-positif" : "profit-negatif"}">
+                    ${x.ventes30 ? formaterNombre(x.margeJour) + " k/jour" : "renseigne les ventes"}
+                </span>
+            </div>
+            <div class="ligne-calcul">
+                <span>Indice de profitabilité</span>
+                <span class="valeur">
+                    ${x.ventes30 ? formaterNombre(x.indice) : "–"}
+                </span>
+            </div>
+            ${x.ventes30
+                ? `<div class="ratios-detail">${(x.ventesJour).toFixed(1)} ventes/jour en moyenne</div>`
+                : ""}
         </div>
         <div class="actions-craft">
             <span class="compteur-craft">crafté ${craftsParRecette[recette.resultId] || 0}×</span>
@@ -473,6 +527,15 @@ function brancherEvenements() {
             prix[id] = val;                 // met à jour le carnet de prix
             sauverJSON("dofus_prix", prix);
             recalculerCartesAffectees(id);  // recalcule uniquement ce qu'il faut
+            return;
+        }
+        // Quantité vendue sur 30 jours : elle alimente les deux ratios.
+        const champVentes = e.target.closest("[data-ventes-objet]");
+        if (champVentes) {
+            const id = parseInt(champVentes.dataset.ventesObjet);
+            ventes[id] = parseFloat(champVentes.value) || 0;
+            sauverJSON("dofus_ventes", ventes);
+            recalculerCartesAffectees(id);
         }
     });
 
@@ -522,15 +585,19 @@ function recalculerCartesAffectees(idObjet) {
     // Plus simple et sûr : on redessine tout. Les saisies restent car on relit `prix`.
     // On garde toutefois le focus sur le champ en cours si possible.
     const actif = document.activeElement;
-    const idActif = actif && actif.dataset ? actif.dataset.prixObjet : null;
-    const estVente = actif && actif.dataset ? actif.dataset.vente !== undefined : false;
+    const dataActif = actif && actif.dataset ? actif.dataset : {};
+    const idActif = dataActif.prixObjet || dataActif.ventesObjet || null;
+    const estVentes = dataActif.ventesObjet !== undefined;
+    const estVente = dataActif.vente !== undefined;
     const posCurseur = actif && actif.selectionStart;
 
     afficherRecettes();
 
     // On tente de redonner le focus au champ que l'utilisateur était en train de remplir.
     if (idActif) {
-        const selecteur = `[data-prix-objet="${idActif}"]${estVente ? "[data-vente]" : ":not([data-vente])"}`;
+        const selecteur = estVentes
+            ? `[data-ventes-objet="${idActif}"]`
+            : `[data-prix-objet="${idActif}"]${estVente ? "[data-vente]" : ":not([data-vente])"}`;
         const nouveau = document.querySelector(selecteur);
         if (nouveau) {
             nouveau.focus();
@@ -707,6 +774,7 @@ function brancherPlan() {
             $("vue-plan").hidden     = bouton.dataset.onglet !== "plan";
             $("vue-recolte").hidden  = bouton.dataset.onglet !== "recolte";
             $("vue-recettes").hidden = bouton.dataset.onglet !== "recettes";
+            $("vue-methode").hidden  = bouton.dataset.onglet !== "methode";
         });
     });
 
@@ -861,11 +929,157 @@ function brancherRecolte() {
 
 
 /* ============================================================
+   11) LA MÉTHODE
+   ------------------------------------------------------------
+   Purement de l'affichage : toutes les données viennent de
+   methode.js. Rien n'est calculé ici.
+   ============================================================ */
+
+function cartesTexte(liste, cleTitre, cleTexte) {
+    return liste.map((e) => `
+        <div class="carte-principe">
+            <div class="principe-titre">${e[cleTitre]}</div>
+            <div class="principe-texte">${e[cleTexte]}</div>
+        </div>
+    `).join("");
+}
+
+function afficherPaliers() {
+    $("listePaliers").innerHTML = PALIERS_METIERS.map((m) => `
+        <div class="metier-paliers famille-${m.famille}">
+            <div class="metier-entete">
+                <h3>${m.metier}</h3>
+                <span class="metier-famille">${m.famille}</span>
+            </div>
+            <p class="metier-resume">${m.resume}</p>
+            <div class="frise">
+                ${m.paliers.map((p) => `
+                    <div class="palier">
+                        <span class="palier-niveau">${p.niveau}</span>
+                        <div class="palier-corps">
+                            <div class="palier-quoi">${p.quoi}</div>
+                            <div class="palier-pourquoi">${p.pourquoi}</div>
+                        </div>
+                    </div>
+                `).join("")}
+            </div>
+            ${m.note ? `<p class="petite-note">⚠️ ${m.note}</p>` : ""}
+        </div>
+    `).join("");
+}
+
+function afficherCouples() {
+    $("listeCouples").innerHTML = COUPLES_SYNERGIE.map((c) => `
+        <div class="couple">
+            <h3>${c.titre}</h3>
+            <ul>${c.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
+            <p class="couple-regle">👉 ${c.regle}</p>
+        </div>
+    `).join("");
+}
+
+function afficherTierlist() {
+    $("listeCriteres").innerHTML = TIERLIST_CRITERES.map((c) => `
+        <div class="critere">
+            <div class="critere-nom">${c.nom}</div>
+            <div class="critere-desc">${c.desc}</div>
+        </div>
+    `).join("");
+
+    $("listeTierlist").innerHTML = TIERLIST.map((t) => `
+        <div class="tier tier-${t.rang.toLowerCase()}">
+            <div class="tier-rang">${t.rang}</div>
+            <div class="tier-corps">
+                <div class="tier-metiers">${t.metiers.join(" · ")}</div>
+                <div class="tier-pourquoi">${t.pourquoi}</div>
+            </div>
+        </div>
+    `).join("");
+
+    $("noteTierlist").textContent = TIERLIST_RESERVE;
+
+    $("metierEcarte").innerHTML = `
+        <strong>🚫 ${METIER_ECARTE.quoi} — à écarter</strong>
+        <p>${METIER_ECARTE.pourquoi}</p>`;
+}
+
+function afficherSocles() {
+    $("listeSocles").innerHTML = SOCLES_PROFIT.map((s) => `
+        <div class="socle socle-${s.statut === "écarté" ? "ecarte" : "central"}">
+            <div class="socle-entete">
+                <h3>${s.socle}</h3>
+                <span class="socle-statut">${s.statut}</span>
+            </div>
+            <p>${s.texte}</p>
+            ${s.consigne ? `<p class="socle-consigne">👉 ${s.consigne}</p>` : ""}
+        </div>
+    `).join("");
+}
+
+function afficherDiversification() {
+    $("regleTresorerie").innerHTML = `
+        <div class="jauge-tresorerie">
+            <div class="jauge-part jauge-investi" style="width:${REGLE_TRESORERIE.investi}%">
+                ${REGLE_TRESORERIE.investi} % investis
+            </div>
+            <div class="jauge-part jauge-cash" style="width:${REGLE_TRESORERIE.cash}%">
+                ${REGLE_TRESORERIE.cash} % liquides
+            </div>
+        </div>
+        <p>${REGLE_TRESORERIE.texte}</p>
+        <p class="petite-note">${REGLE_TRESORERIE.nuance}</p>`;
+
+    $("conditionDiversification").textContent = CONDITION_DIVERSIFICATION;
+
+    $("listeHdv").innerHTML = REPARTITION_HDV.map((h) => `
+        <div class="carte-hdv">
+            <div class="hdv-part">${h.part} %</div>
+            <div class="hdv-nom">${h.hdv}</div>
+            <div class="hdv-vitesse">vitesse de vente : ${h.vitesse}</div>
+        </div>
+    `).join("");
+}
+
+function afficherEvenements() {
+    $("listeEvenements").innerHTML = EVENEMENTS_MARCHE.map((e) => `
+        <div class="evenement">
+            <div class="evenement-entete">
+                <h3>${e.nom}</h3>
+                <span class="evenement-freq">${e.frequence}</span>
+            </div>
+            <p>${e.effet}</p>
+            <p class="evenement-action">👉 ${e.quoi_faire}</p>
+        </div>
+    `).join("");
+
+    $("actualisationPrix").innerHTML = `
+        <strong>🔁 À quelle fréquence actualiser son prix de vente ?</strong>
+        <p>${ACTUALISATION_PRIX.regle}</p>
+        <p class="petite-note">
+            Rappel des taxes du jeu : ${ACTUALISATION_PRIX.taxe_baisse} % si tu baisses le prix,
+            ${ACTUALISATION_PRIX.taxe_hausse} % si tu le montes.
+        </p>`;
+}
+
+function afficherMethode() {
+    $("listePieges").innerHTML = cartesTexte(PIEGES, "titre", "texte");
+    $("listeRatios").innerHTML = cartesTexte(REGLES_RATIOS, "titre", "texte");
+    afficherPaliers();
+    afficherCouples();
+    afficherTierlist();
+    afficherSocles();
+    afficherDiversification();
+    afficherEvenements();
+}
+
+
+/* ============================================================
    8) DÉMARRAGE
    ============================================================ */
 
 brancherEvenements();
 brancherPlan();
 brancherRecolte();
+afficherMethode();
 rafraichirTableauBord();
 chargerMetiers();

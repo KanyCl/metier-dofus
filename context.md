@@ -1,0 +1,128 @@
+# context.md — metier-dofus
+
+## C'est quoi
+
+Outil web personnel pour **monter les 19 métiers de Dofus 3 en partant de zéro kama**
+et **savoir quoi crafter** à chaque instant. Page statique (HTML + CSS + JS, aucun
+framework, aucun serveur), publiée sur GitHub Pages :
+https://kanycl.github.io/metier-dofus/
+
+Dépôt : `KanyCl/metier-dofus` (public). **Il ne vit pas dans le dépôt `atelier`** —
+il y est ignoré via `.gitignore`, même montage que `allemand` et `TymFit`.
+
+## Pourquoi une page statique
+
+Le projet a été démarré depuis un iPhone. Contrainte : rien à installer, rien à
+compiler, tout doit tourner dans un navigateur. Les données de jeu viennent en
+direct de l'API publique **DofusDB** (`api.dofusdb.fr`), les données personnelles
+(prix, ventes, progression, notes) restent dans le `localStorage` du navigateur.
+
+## Les quatre onglets
+
+| Onglet | Ce qu'il répond |
+|---|---|
+| 📋 Feuille de route | Dans quel ordre monter quoi, et avec quel capital |
+| 🌾 Que récolter | À mon niveau, quelle ressource rapporte le plus d'XP |
+| ⚒️ Recettes & rentabilité | Ce craft mérite-t-il mes kamas ? |
+| 🧭 La méthode | Pourquoi, les paliers, les synergies, la tier list |
+
+## Les fichiers
+
+| Fichier | Rôle |
+|---|---|
+| `index.html` | la structure des quatre onglets |
+| `style.css` | l'apparence (palette Catppuccin Mocha) |
+| `app.js` | toute la logique : API, calculs, affichage, sauvegardes |
+| `feuille-route.js` | **données** : principes, phases, investissements passifs, synergies |
+| `methode.js` | **données** : ratios, paliers par métier, tier list, socles du profit, événements |
+| `recolte.js` | **données** : métiers de récolte, tranches de niveau, pistes d'API |
+
+Règle de rangement : `app.js` ne contient aucune donnée de jeu, les trois autres
+`.js` ne contiennent aucune logique.
+
+## 30 août 2026 — intégration du guide DAIGO
+
+Le projet reposait jusque-là sur une méthode reconstituée de mémoire. Il a été
+recalé sur le guide **« 0 à 200 FULL MÉTIERS — GUIDE DOFUS 3 »** de DAIGO
+(https://youtu.be/u2eHffxtrBw, 45 min). Ce qui a changé :
+
+### Les deux ratios, qui manquaient complètement
+L'outil ne calculait que `coût → prix de vente → profit`. Or, dans le guide,
+**la marge seule ne veut rien dire**. Ajoutés :
+- **marge journalière** = marge en kamas × ventes par jour → le potentiel brut ;
+- **indice de profitabilité** = ventes par jour × marge en % → le rendement du capital.
+
+La quantité vendue **sur 30 jours** se saisit sur chaque carte de recette
+(`localStorage: dofus_ventes`), et deux tris ont été ajoutés.
+
+**Marge % = profit ÷ prix de vente.** Vérifié en rejouant l'exemple chiffré du
+guide (épée de boisaille : 10 490 ventes/30 j, craft 1 600, vente 2 700) →
+349,7 ventes/jour, 40,7 % de marge, 384 633 k/jour, indice 14 246. Le guide
+annonce 350, 40 %, 384 000 et ~13 400. ✅
+
+⚠️ Sur son second exemple (huile de coude), l'auteur annonce 55 % de marge, ce
+qui ne colle pas avec les prix qu'il donne lui-même (4 500 → 7 500, soit 40 %).
+Sa conclusion tient quand même, et c'est elle qui compte : l'huile gagne en marge
+journalière, l'épée gagne en indice de profitabilité.
+
+### La feuille de route, refaite d'après la « run opti »
+Elle passe de **4 à 7 phases**, avec les paliers de capital réels du guide :
+0 → 0 → **30 000** → **200 000** → **1 000 000** → **5 000 000** → 10 000 000+.
+
+Corrections notables par rapport à la version précédente :
+- le départ se fait à **Incarnam** par le farm (Chasseur 10 + Mineur 10 en passant),
+  pas à Astrub par la récolte — au niveau 1, un métier de récolte ne rapporte rien ;
+- il manquait le palier des **30 000 kamas** (Alchimiste 20 → 30), qui est le tout
+  premier achat du parcours et conditionne toute la chaîne de récolte ;
+- **Mineur 40 était placé à 200 000 kamas ; c'est 1 000 000.** Sa montée coûte
+  500 000 à 600 000 kamas de perte sèche assumée ;
+- Façonneur (boucliers, trophées 50 puis 100) était totalement absent ;
+- les métiers de FM se montent **un à la fois**, directement au 110, et on
+  n'attaque le suivant qu'après avoir récupéré sa mise.
+
+### Nouveau fichier `methode.js` et nouvel onglet 🧭
+Il porte tout ce que le guide explique et que l'outil ne disait nulle part :
+- les **paliers (power spikes)** de chaque métier, avec le niveau et la raison ;
+- les **synergies chiffrées** (Alchimiste 30/95/135/175 → Bûcheron 40/100/140/180 ;
+  Paysan ⇄ Alchimiste à 20-40 niveaux d'écart ; Alchimiste X → Pêcheur X+20) ;
+- la **tier list** et ses quatre critères ;
+- les **cinq socles du profit** — et surtout pourquoi le brisage est une *rente
+  informationnelle* périssable là où la forgemagie est une *compétence* durable ;
+- la **répartition des HDV** (50 / 30 / 15 / 5) et la règle 80 / 20 ;
+- les **événements** qui bougent les prix (Almanax, mises à jour, réseaux sociaux,
+  l'HDV lui-même) et la règle d'actualisation des prix (taxe 2 % / 1 %) ;
+- les deux pièges : **coût d'opportunité** et **XP de craft dégressive**.
+
+### Ce qui a été délibérément laissé de côté
+- **La partie sponsorisée** (placement produit pour un autre jeu) : hors sujet.
+- **Le placement complet de la tier list** : le guide n'en commente que quatre
+  entrées à l'oral, le reste n'est qu'affiché à l'écran. Le fichier le dit
+  explicitement (`TIERLIST_RESERVE`) plutôt que de combler au jugé.
+- **Le 20ᵉ métier** : écarté par l'auteur, marché déréglé. Documenté comme tel.
+- **Le transcript verbatim** n'est pas versionné : seule la méthode (les idées,
+  les chiffres) est encodée, avec crédit et lien vers la source.
+
+## Vérification
+
+Pas de Node ni de Python sur le poste : les tests passent par **Chrome headless
+piloté en CDP** (WebSocket depuis PowerShell). Le contrôle vérifie que les six
+fichiers `.js` s'exécutent sans erreur, que les 7 phases / 27 étapes /
+11 investissements / 8 métiers / 32 paliers / 6 couples / 4 tiers / 5 socles /
+4 HDV / 4 événements sont bien rendus, que la bascule d'onglets fonctionne, et
+que `calculerRatios` reproduit les chiffres du guide.
+
+## Pistes non faites (à valider)
+
+- Récupérer automatiquement les volumes de vente : **aucune API publique ne les
+  expose**, ils se relèvent à la main dans l'HDV du jeu. C'est la limite dure de
+  l'outil aujourd'hui.
+- Un comparateur côte à côte de deux crafts sur les deux ratios.
+- Un rappel Almanax du jour (offrande → ressources concernées).
+- Cocher les paliers atteints métier par métier dans l'onglet Méthode.
+
+## Rappel
+
+Les niveaux et les montants sont des **repères de marché**, pas des règles du jeu :
+ils dépendent du serveur et de la date. Le guide le dit lui-même — il ne donne
+volontairement aucune « recette miracle », parce qu'une recette rentable partagée
+cesse d'être rentable.
