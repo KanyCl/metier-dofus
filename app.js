@@ -1664,6 +1664,16 @@ function brancherOnglets() {
     document.querySelectorAll(".onglet").forEach((bouton) => {
         bouton.addEventListener("click", () => activerOnglet(bouton.dataset.onglet));
     });
+
+    // Les raccourcis posés dans le corps des pages (ex. « saisir tous mes
+    // niveaux ») basculent vers l'onglet visé, et remontent en haut : sinon
+    // on arrive au milieu de la nouvelle page sans comprendre où on est.
+    document.querySelectorAll("[data-va-vers]").forEach((lien) => {
+        lien.addEventListener("click", () => {
+            activerOnglet(lien.dataset.vaVers);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+    });
     // On rouvre l'outil sur le dernier onglet consulté.
     const dernier = localStorage.getItem("dofus_onglet");
     const existe = dernier && document.querySelector(`.onglet[data-onglet="${dernier}"]`);

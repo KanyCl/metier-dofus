@@ -422,7 +422,20 @@ code {
 .maillon-vers { font-weight: bold; color: var(--bleu); }
 
 @media (max-width: 600px) {
-    .onglet { flex: 1; padding: 10px 8px; font-size: 0.85rem; }
+    /* Six onglets ne tiennent pas sur une ligne : en grille de deux
+       colonnes, ils restent tous visibles et lisibles d'un seul coup d'œil.
+       (En flex:1 ils étaient écrasés à ~84 px, libellés coupés.) */
+    .onglets {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 0 4px;
+    }
+    .onglet {
+        padding: 12px 10px;
+        font-size: 0.86rem;
+        text-align: center;
+    }
     .etape-corps { padding-left: 0; }
     .ligne-tresorerie { flex-direction: column; align-items: stretch; }
 }
@@ -995,3 +1008,16 @@ code {
     .plan-revente { grid-column: 1 / -1; }
     .ligne-cout { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
+
+/* ---------- Raccourci vers « Mes métiers » ---------- */
+.lien-onglet {
+    background: none;
+    border: none;
+    color: var(--bleu);
+    font-size: 0.72rem;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+}
+.lien-onglet:hover { color: var(--vert); }
