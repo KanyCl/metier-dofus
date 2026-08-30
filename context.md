@@ -275,3 +275,26 @@ Le calibrage vient du **seul Chasseur**. Si l'XP par craft dépendait aussi du
 métier ou du nombre de cases de la recette, les autres métiers dériveraient.
 Un relevé sur un métier d'équipement (Bijoutier, Cordonnier…) le dirait — et
 s'ajouterait à `test-xp.js`.
+
+### Ce que les vingt mesures ne peuvent pas dire
+
+L'XP d'un craft baisse-t-elle quand le métier dépasse le niveau de la recette ?
+Les joueurs le rapportent, mais **ces relevés ne permettent pas de le mesurer** :
+dans le plan de DofusDB, chaque recette sert sur les dix niveaux qui la suivent,
+donc l'écart va toujours de 0 à 9. Une perte liée à cet écart agit identiquement
+sur les vingt mesures — elle y est absorbée, invisible.
+
+Une perte proportionnelle au *rapport* des niveaux, elle, est réfutée : au niveau 1
+utilisé jusqu'au niveau 9 (9× son niveau), elle prédirait ~2 100 crafts là où la
+mesure en donne 77.
+
+**Conséquence.** La table ne donne pas « l'XP d'un craft » mais « l'XP moyenne d'un
+craft sur les dix niveaux suivants ». Tant qu'on crafte près de son niveau — ce que
+fait le plan, qui prend toujours la recette la plus haute réalisable — c'est la
+bonne valeur, et les vingt mesures le confirment. Au-delà de dix niveaux d'écart,
+la valeur renvoyée est un **majorant**, et l'interface le dit : « ≤ 130 XP / craft »
+sur les cartes de recette, et une alerte sur les paliers concernés.
+
+**Ce qui trancherait.** Un relevé où une même recette sert sur beaucoup plus de dix
+niveaux — ou, plus simple, l'XP réellement gagnée en jeu sur un craft bas niveau à
+haut niveau de métier. Une seule mesure de ce genre suffirait à calibrer la chute.

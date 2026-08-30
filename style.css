@@ -1031,3 +1031,14 @@ code {
     margin-bottom: 16px;
 }
 .avertissement-fort a { color: var(--bleu); }
+
+/* Une XP que l'on sait surestimée : on l'annonce comme un majorant. */
+.xp-majorant { color: var(--orange); border-bottom: 1px dotted var(--orange); cursor: help; }
+.palier-alerte {
+    font-size: 0.76rem;
+    color: var(--orange);
+    background: #3a2f22;
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin-top: 6px;
+}

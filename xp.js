@@ -42,11 +42,26 @@ function xpTotaleEntre(depart, cible) {
 /* ------------------------------------------------------------
    2) Ce que rapporte un craft
    ------------------------------------------------------------
-   L'XP d'un craft dépend du NIVEAU DE LA RECETTE, et de rien
-   d'autre : ni du niveau du métier, ni de l'écart entre les
-   deux. C'est là que la version précédente se trompait, en
-   appliquant une « pénalité d'écart de niveau » que les chiffres
-   ne montrent pas.
+   ⚠️ CE QUE CETTE TABLE MESURE, EXACTEMENT.
+
+   Dans les relevés de DofusDB, chaque recette est utilisée sur
+   les DIX niveaux qui la suivent : l'écart entre le métier et la
+   recette va toujours de 0 à 9, jamais plus. Une perte d'XP liée
+   à cet écart agirait donc de la même façon sur les vingt
+   mesures — elle y est ABSORBÉE, sans jamais se laisser voir.
+
+   Autrement dit : ces valeurs ne sont pas « l'XP d'un craft »
+   mais « l'XP MOYENNE d'un craft sur les dix niveaux suivants ».
+   Tant qu'on crafte près de son niveau — ce que fait le plan de
+   montée, qui prend toujours la recette la plus haute possible —
+   c'est exactement la bonne valeur, et les vingt mesures le
+   confirment.
+
+   Au-delà de dix niveaux d'écart, en revanche, les joueurs
+   rapportent que l'XP continue de fondre. Ces données-là ne
+   permettent pas de mesurer cette chute : hors de ce domaine,
+   la valeur renvoyée est donc un MAJORANT, pas une prévision.
+   `ecartMesure()` dit si l'on est dans le domaine vérifié.
 
    La table ci-dessous est un CALIBRAGE, pas une théorie. Chaque
    valeur est déduite des quantités annoncées par l'outil
@@ -106,9 +121,16 @@ function xpParCraftDeLaRecette(niveauRecette) {
     return xpB + (niv - nivB) * ((xpB - xpA) / (nivB - nivA));
 }
 
-/* L'XP que ce craft me rapporte, à MON niveau de métier. Le niveau
-   de métier ne sert qu'à savoir si la recette est réalisable : il
-   ne change pas le gain. */
+/* Jusqu'à combien de niveaux d'écart les mesures font-elles foi ?
+   Au-delà, l'XP annoncée est un majorant. */
+const ECART_MESURE = 10;
+
+// Suis-je dans le domaine où les mesures font foi ?
+function ecartFiable(niveauObjet, niveauMetier) {
+    return (niveauMetier - Math.max(1, niveauObjet)) <= ECART_MESURE;
+}
+
+/* L'XP que ce craft me rapporte, à MON niveau de métier. */
 function xpParCraft(niveauObjet, niveauMetier) {
     const niv = Math.max(1, niveauObjet);
     if (niv > niveauMetier) return 0;   // pas encore craftable
@@ -174,13 +196,16 @@ function planDeMontee(recettes, niveauDepart, niveauCible) {
         if (precedent && precedent.recette.id === meilleure.id) {
             precedent.auNiveau = niv + 1;
             precedent.xpAGagner += xpPourMonterDe(niv);
+            if (!ecartFiable(meilleure.niveauObjet, niv)) precedent.horsDomaine = true;
         } else {
             paliers.push({
                 recette: meilleure,
                 deNiveau: niv,
                 auNiveau: niv + 1,
                 xpAGagner: xpPourMonterDe(niv),
-                xpParCraft: meilleureXp
+                xpParCraft: meilleureXp,
+                // Vrai si, sur ce palier, on s'éloigne du domaine mesuré.
+                horsDomaine: !ecartFiable(meilleure.niveauObjet, niv)
             });
         }
     }
@@ -224,7 +249,8 @@ function meilleursCraftsMaintenant(recettes, niveauMetier, combien) {
 // sans rien changer dans le navigateur où tout est déjà global.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        XP_PAR_NIVEAU, XP_PAR_CRAFT_MESUREE, xpPourMonterDe, xpTotaleEntre,
+        XP_PAR_NIVEAU, XP_PAR_CRAFT_MESUREE, ECART_MESURE, ecartFiable,
+        xpPourMonterDe, xpTotaleEntre,
         xpParCraftDeLaRecette, xpParCraft, casesMax, craftPossible,
         planDeMontee, meilleursCraftsMaintenant
     };

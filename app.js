@@ -391,7 +391,11 @@ function creerCarteRecette(x, monNiveau) {
         <div class="recette-titre">
             <div class="recette-nom">${echapper(objet.nom)}</div>
             <div class="recette-niveau">
-                Niveau ${nivObjet}${gainXp > 0 ? " · " + formaterNombre(gainXp) + " XP / craft" : ""}
+                Niveau ${nivObjet}${gainXp > 0
+                    ? (ecartFiable(nivObjet, monNiveau)
+                        ? " · " + formaterNombre(gainXp) + " XP / craft"
+                        : ` · <span class="xp-majorant" title="Cette recette est à plus de ${ECART_MESURE} niveaux sous le tien. L'XP réelle est plus basse : les mesures qui calibrent l'outil ne couvrent pas un tel écart.">≤ ${formaterNombre(gainXp)} XP / craft</span>`)
+                    : ""}
             </div>
         </div>
         ${dansFenetre ? `<span class="badge-fenetre">bon pour l'XP</span>` : ""}
@@ -1533,8 +1537,13 @@ function afficherPlan(depart, cible) {
                         <div class="plan-detail">
                             objet niveau ${pal.recette.niveauObjet} ·
                             ${pal.recette.nbCases} case(s) ·
-                            ${formaterNombre(pal.xpParCraft)} XP par craft
+                            ${pal.horsDomaine ? "≤ " : ""}${formaterNombre(pal.xpParCraft)} XP par craft
                         </div>
+                        ${pal.horsDomaine ? `<div class="palier-alerte">
+                            ⚠️ Ce métier n'offre rien de plus haut ici : tu crafterais à plus de
+                            ${ECART_MESURE} niveaux sous toi, où l'XP réelle est plus basse que
+                            l'estimation. Prévois <strong>plus</strong> de crafts que le chiffre affiché.
+                        </div>` : ""}
                     </div>
                 </div>
             </div>
