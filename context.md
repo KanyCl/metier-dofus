@@ -197,3 +197,22 @@ des niveaux, report sur les autres onglets, plan, synergies, chiffrage, partage 
 carnet de prix, échappement HTML), et une **non-régression** des quatre onglets
 d'origine (7 phases / 27 étapes / 11 investissements / 8 métiers / 6 couples /
 5 socles, bascule des 6 onglets, zéro erreur JS).
+
+## Le piège du cache (à connaître avant toute publication)
+
+Symptôme observé le 30 août : sur iPhone, après une mise à jour, les nouveaux
+onglets s'affichaient bien (donc `index.html` et `style.css` étaient à jour) mais
+cliquer sur « Mes métiers » ouvrait une **page entièrement vide**. Le navigateur
+avait rechargé le HTML tout en gardant l'**ancien `app.js`** en cache : l'ancien
+code ne connaissait que quatre vues, il mettait l'onglet en surbrillance sans
+jamais démasquer la section correspondante.
+
+Rien à voir avec un bug de code — les fichiers déployés étaient corrects.
+
+**La parade :** chaque `<script>` et le `<link>` du CSS portent un numéro de
+version dans leur adresse (`app.js?v=2026-08-30b`). Une adresse différente est un
+fichier différent pour le navigateur : la mise à jour est forcément téléchargée.
+
+👉 **Changer ce numéro dans `index.html` à chaque publication.** C'est la seule
+étape manuelle du projet. L'oublier ne casse rien tout de suite : ça fait juste
+resservir l'ancienne version à ceux qui ont déjà visité le site.
