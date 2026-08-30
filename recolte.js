@@ -11,6 +11,12 @@
    surtout pas inventée.
    ============================================================ */
 
+/* Des entrées que l'API de DofusDB renvoie parmi les métiers, mais qui
+   ne sont pas des métiers jouables : elles ne se montent pas, ne se
+   choisissent pas, et n'ont aucune recette. On les écarte partout dans
+   l'outil dès la réception. */
+const METIERS_INEXISTANTS = ["Base", "Bestiologue"];
+
 // Les métiers de récolte de Dofus.
 const METIERS_RECOLTE = [
     "Paysan", "Bûcheron", "Alchimiste", "Mineur", "Pêcheur", "Chasseur"

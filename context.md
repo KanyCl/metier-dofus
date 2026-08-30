@@ -39,7 +39,7 @@ L'onglet ouvert est mémorisé d'une visite à l'autre.
 | `app.js` | toute la logique : API, calculs, affichage, sauvegardes |
 | `feuille-route.js` | **données** : principes, phases, investissements passifs, synergies |
 | `methode.js` | **données** : ratios, paliers par métier, tier list, socles du profit, événements |
-| `recolte.js` | **données** : métiers de récolte, tranches de niveau, pistes d'API |
+| `recolte.js` | **données** : métiers de récolte, entrées à ignorer, tranches, pistes d'API |
 | `xp.js` | **règles de calcul** de l'XP métier — fonctions pures, aucune dépendance |
 | `test-xp.js` | contrôle de `xp.js` — `node test-xp.js`, ou `lancerTestsXp()` en console |
 
@@ -216,3 +216,23 @@ fichier différent pour le navigateur : la mise à jour est forcément télécha
 👉 **Changer ce numéro dans `index.html` à chaque publication.** C'est la seule
 étape manuelle du projet. L'oublier ne casse rien tout de suite : ça fait juste
 resservir l'ancienne version à ceux qui ont déjà visité le site.
+
+## Les entrées qui ne sont pas des métiers
+
+L'API renvoie parmi les métiers des entrées internes — **« Base »**,
+**« Bestiologue »** — qui ne se montent pas et ne se choisissent pas.
+
+L'outil les écartait autrefois de façon indirecte, en ne gardant que les métiers
+possédant au moins une recette. C'était fragile : ça reposait sur une propriété
+qui pouvait changer côté API, et ça ne protégeait que le menu des recettes — les
+entrées réapparaissaient dans « Mes métiers », qui reçoit la liste complète.
+
+Elles sont désormais nommées dans `METIERS_INEXISTANTS` (`recolte.js`) et
+écartées **à la réception**, dans `chargerMetiers` : elles n'atteignent aucun
+onglet. La comparaison ignore accents et casse, et porte sur le **nom entier** —
+un « contient » risquerait d'emporter un vrai métier. Un niveau qui aurait été
+saisi pour l'une d'elles est effacé du navigateur, sans quoi il y resterait sans
+jamais pouvoir s'afficher ni s'effacer.
+
+Si une autre entrée fantôme apparaît un jour, il suffit d'ajouter son nom à cette
+liste.

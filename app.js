@@ -95,6 +95,15 @@ function statut(texte, type) {
    2) CHARGEMENT DES MÉTIERS
    ============================================================ */
 
+/* « Base », « Bestiologue »… : ces entrées existent dans les données du
+   jeu mais ne sont pas des métiers. On compare sans accent ni casse, et
+   sur le nom ENTIER — un « contient » risquerait d'emporter un vrai
+   métier dont le nom inclurait le mot. */
+function estUnFauxMetier(metier) {
+    const nom = sansAccent(loc(metier.name));
+    return METIERS_INEXISTANTS.some((faux) => nom === sansAccent(faux));
+}
+
 // Combien de recettes ce métier possède-t-il ? ($limit=0 : on ne veut que le total)
 async function compterRecettes(jobId) {
     try {
@@ -110,8 +119,16 @@ async function chargerMetiers() {
     try {
         // On demande jusqu'à 100 métiers d'un coup.
         const data = await appelAPI("/jobs?$limit=100&lang=fr");
-        const metiers = (data.data || data) // FeathersJS renvoie { data: [...] }
-            .filter((m) => m && m.id != null)
+        const recus = (data.data || data) // FeathersJS renvoie { data: [...] }
+            .filter((m) => m && m.id != null);
+
+        // On écarte les entrées qui ne sont pas de vrais métiers (voir
+        // METIERS_INEXISTANTS dans recolte.js). C'est fait ici, à la source :
+        // ainsi elles n'apparaissent dans AUCUN onglet.
+        const faux = recus.filter(estUnFauxMetier);
+        oublierNiveaux(faux.map((m) => m.id));
+        const metiers = recus
+            .filter((m) => !estUnFauxMetier(m))
             .sort((a, b) => loc(a.name).localeCompare(loc(b.name)));
 
         // L'API liste aussi des entrées internes qui ne sont pas de vrais
@@ -1160,6 +1177,20 @@ function definirNiveauMetier(idMetier, niveau) {
 
     sauverJSON("dofus_niveaux_metiers", niveauxMetiers);
     for (const prevenir of abonnesAuxNiveaux) prevenir();
+}
+
+/* Efface les niveaux enregistrés pour des entrées qui ne sont pas de
+   vrais métiers. Sans ça, un niveau saisi avant leur retrait resterait
+   dans le navigateur sans plus jamais s'afficher — ni pouvoir s'effacer. */
+function oublierNiveaux(ids) {
+    let modifie = false;
+    for (const id of ids) {
+        if (niveauxMetiers[String(id)] != null) {
+            delete niveauxMetiers[String(id)];
+            modifie = true;
+        }
+    }
+    if (modifie) sauverJSON("dofus_niveaux_metiers", niveauxMetiers);
 }
 
 // Les métiers réellement commencés, du plus haut au plus bas.
