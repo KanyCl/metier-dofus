@@ -61,7 +61,7 @@ function xpTotaleEntre(depart, cible) {
    rapportent que l'XP continue de fondre. Ces données-là ne
    permettent pas de mesurer cette chute : hors de ce domaine,
    la valeur renvoyée est donc un MAJORANT, pas une prévision.
-   `ecartMesure()` dit si l'on est dans le domaine vérifié.
+   `ecartFiable()` dit si l'on est dans le domaine vérifié.
 
    La table ci-dessous est un CALIBRAGE, pas une théorie. Chaque
    valeur est déduite des quantités annoncées par l'outil
@@ -162,10 +162,12 @@ function craftPossible(recette, niveauMetier) {
    4) LE PLAN DE MONTÉE
    ------------------------------------------------------------
    Niveau par niveau, on retient la recette qui rapporte le plus
-   d'XP parmi celles réalisables, et on compte les crafts. Comme
-   l'XP ne dépend que du niveau de la recette, la meilleure est
-   toujours la plus haute réalisable — et rester sur une recette
-   basse n'a aucun intérêt.
+   d'XP parmi celles réalisables : c'est toujours la plus haute
+   possible. Rester sur une recette basse n'a aucun intérêt — et
+   c'est heureux, car c'est précisément ce qui maintient le plan
+   dans le domaine où les mesures font foi (moins de dix niveaux
+   d'écart). Quand un métier n'offre rien d'assez haut, le palier
+   est marqué `horsDomaine` et l'estimation devient un majorant.
 
    Les niveaux consécutifs qui partagent la même recette sont
    regroupés en paliers : c'est la feuille de route de montée.
