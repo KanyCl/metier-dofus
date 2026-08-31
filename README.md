@@ -31,19 +31,29 @@ celles que tu peux **réellement** réaliser, et produit :
 - le **chiffrage** : coût des ingrédients, revente des objets craftés, **bilan net** et coût
   par niveau. Monter un métier n'est pas une dépense sèche — la revente peut tout financer.
 
-**D'où viennent les chiffres d'XP.** Ankama ne publie pas de formule ; ces règles viennent
-des relevés de la communauté :
+**D'où viennent les chiffres d'XP.** Ankama ne publie pas de formule. Les chiffres de cet
+outil ne sont donc pas déduits d'une théorie mais **calibrés sur des mesures** relevées sur
+l'outil [XP Métier de DofusDB](https://dofusdb.fr/fr/tools/jobs-xp) : le Chasseur, du niveau
+1 au niveau 200, planifié par tranches de dix.
 
 | Règle | Valeur |
 |---|---|
-| Coût d'un niveau de métier | 20 × le niveau |
-| Craft d'un objet à ton niveau | 20 × le niveau de l'objet (= un niveau gagné en un craft) |
-| Pénalité d'écart de niveau | ~90 % à 1 niveau, 75 % à 3, 50 % à 8, 25 % à 22, 10 % à 55 |
+| Coût d'un niveau de métier | 20 × le niveau (soit 398 000 XP pour aller de 1 à 200) |
+| XP d'un craft | dépend du **seul niveau de la recette** — table calibrée, ≈ 4/3 × ce niveau |
 | Cases d'ingrédients débloquées | 2 au niv. 1, 3 au niv. 10, 4 au niv. 20, puis +1 tous les 20 |
 
-Elles sont regroupées **en haut de `xp.js`** pour rester faciles à ajuster si tu constates un
-écart en jeu. Pour les revérifier : `node test-xp.js`, ou `lancerTestsXp()` dans la console
-du navigateur (F12) si tu n'as pas Node.
+`test-xp.js` **rejoue les vingt mesures d'origine** et les reproduit toutes exactement. Pour
+les relancer : `node test-xp.js`, ou `lancerTestsXp()` dans la console du navigateur (F12) si
+tu n'as pas Node.
+
+> ⚠️ **Ce que ces mesures ne disent pas.** Dans le plan de DofusDB, chaque recette sert sur
+> les dix niveaux qui la suivent : l'écart métier − recette va toujours de 0 à 9. Une perte
+> d'XP liée à cet écart y est donc **absorbée**, invisible. Les valeurs de la table sont
+> l'XP *moyenne* sur ces dix niveaux — la bonne valeur tant qu'on crafte près de son niveau,
+> ce que fait le plan. Au-delà de dix niveaux d'écart, l'outil affiche « ≤ » : il annonce un
+> majorant, pas une prévision.
+>
+> Le calibrage ne porte pour l'instant que sur le **Chasseur**.
 
 ### 📋 Feuille de route
 Un parcours en **7 phases**, débloquées par la **trésorerie** plutôt que par le niveau :

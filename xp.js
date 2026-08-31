@@ -235,18 +235,6 @@ function planDeMontee(recettes, niveauDepart, niveauCible) {
 }
 
 
-/* ------------------------------------------------------------
-   Le classement « quoi crafter maintenant »
-   ------------------------------------------------------------ */
-function meilleursCraftsMaintenant(recettes, niveauMetier, combien) {
-    return recettes
-        .filter((r) => craftPossible(r, niveauMetier))
-        .map((r) => ({ ...r, xp: xpParCraft(r.niveauObjet, niveauMetier) }))
-        .sort((a, b) => b.xp - a.xp)
-        .slice(0, combien || 5);
-}
-
-
 // Rend ces fonctions utilisables par le script de test (Node),
 // sans rien changer dans le navigateur où tout est déjà global.
 if (typeof module !== "undefined" && module.exports) {
@@ -254,6 +242,6 @@ if (typeof module !== "undefined" && module.exports) {
         XP_PAR_NIVEAU, XP_PAR_CRAFT_MESUREE, ECART_MESURE, ecartFiable,
         xpPourMonterDe, xpTotaleEntre,
         xpParCraftDeLaRecette, xpParCraft, casesMax, craftPossible,
-        planDeMontee, meilleursCraftsMaintenant
+        planDeMontee
     };
 }

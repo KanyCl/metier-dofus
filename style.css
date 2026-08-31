@@ -1022,15 +1022,6 @@ code {
 }
 .lien-onglet:hover { color: var(--vert); }
 
-/* Un avertissement qu'on ne peut pas manquer : il porte sur la fiabilité
-   des chiffres affichés juste en dessous. */
-.avertissement-fort {
-    border-left-width: 4px;
-    border-left-color: var(--rouge);
-    background: #3a2630;
-    margin-bottom: 16px;
-}
-.avertissement-fort a { color: var(--bleu); }
 
 /* Une XP que l'on sait surestimée : on l'annonce comme un majorant. */
 .xp-majorant { color: var(--orange); border-bottom: 1px dotted var(--orange); cursor: help; }
