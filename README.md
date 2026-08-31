@@ -131,3 +131,15 @@ dehors des appels de lecture à l'API DofusDB.
 `app.js` ne contient aucune donnée de jeu ; les trois autres `.js` ne contiennent aucune logique.
 
 > Projet d'apprentissage — non affilié à Ankama.
+
+## Données et licence
+
+Les données de jeu proviennent de l'API publique [DofusDB](https://dofusdb.fr/)
+(`api.dofusdb.fr`).
+
+> **Données issues de DofusDB. Utilisation soumise à la
+> [LPNC-IA 1.0](https://api.dofusdb.fr/).**
+
+La LPNC-IA 1.0 est une licence publique **non commerciale**. Ce projet est gratuit,
+sans publicité ni monétisation d'aucune sorte.
+Le texte complet est dans le fichier [LICENSE](LICENSE).

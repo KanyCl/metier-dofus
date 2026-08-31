@@ -1,0 +1,213 @@
+LPNC-IA 1.0 / NCPUL-AI 1.0 — Version 1.0 — 2026
+
+Ce projet (metier-dofus) utilise les données de l'API publique DofusDB
+(api.dofusdb.fr) et est distribué sous la même licence, conformément à la
+clause 3.2 « Partage dans les mêmes conditions ».
+
+Texte de la licence tel que publié par le Titulaire sur https://api.dofusdb.fr/
+
+================================================================================
+VERSION FRANÇAISE
+
+Licence d'Utilisation Publique Non Commerciale sans Intelligence Artificielle
+(LPNC-IA 1.0)
+
+1. Définitions
+
+  « API » désigne l'interface de programmation applicative publique mise à
+  disposition par le Titulaire pour accéder aux données du jeu Dofus.
+
+  « Titulaire » désigne la personne ou l'entité qui publie et maintient l'API.
+
+  « Utilisateur » désigne toute personne physique ou morale qui accède à l'API
+  ou utilise les données issues de celle-ci.
+
+  « Projet » désigne toute application, site web, script, outil, service ou
+  œuvre dérivée utilisant tout ou partie des données fournies par l'API.
+
+  « Intelligence Artificielle (IA) » désigne tout système automatisé
+  d'apprentissage machine, réseau de neurones, modèle de langage (LLM), outil
+  de génération de contenu, ou tout système similaire capable de produire,
+  compléter, transformer ou analyser du contenu de manière automatisée.
+
+2. Droits accordés
+
+Sous réserve du respect des présentes conditions, le Titulaire accorde à
+l'Utilisateur un droit non exclusif, non transférable, mondial, gratuit de :
+
+  - Accéder aux données fournies par l'API ;
+  - Intégrer ces données dans des Projets à des fins strictement non
+    commerciales ;
+  - Partager et distribuer des Projets basés sur ces données, dans le respect
+    des présentes conditions.
+
+3. Conditions obligatoires
+
+3.1 Attribution
+
+  Tout Projet utilisant l'API doit clairement mentionner l'attribution suivante
+  dans un endroit visible (page d'accueil, documentation, mentions légales,
+  fichier README ou équivalent) :
+
+    « Données issues de DofusDB. Utilisation soumise à la LPNC-IA 1.0. »
+
+3.2 Partage dans les mêmes conditions
+
+  Tout Projet dérivé doit être distribué sous les mêmes termes que la présente
+  licence ou sous une licence compatible.
+
+4. Restrictions
+
+4.1 Usage non commercial
+
+  Il est strictement interdit d'utiliser l'API ou les données issues de
+  celle-ci à des fins commerciales, notamment :
+
+  - Vente directe ou indirecte de données ou de services basés sur ces
+    données ;
+  - Monétisation via publicité, abonnement payant ou tout autre modèle
+    économique ;
+  - Intégration dans un produit ou service commercial.
+
+4.2 Restrictions liées à l'Intelligence Artificielle
+
+  L'utilisation d'outils d'IA à titre ponctuel et accessoire (autocomplétion,
+  suggestion de code, correction orthographique, etc.) est tolérée, à condition
+  que l'Utilisateur reste l'auteur principal et responsable du Projet.
+
+  En revanche, il est strictement interdit :
+
+  - De générer un Projet majoritairement par IA : tout Projet dont la
+    structure, le code, le contenu ou la logique a été produit en majorité
+    (plus de 50 %) par des outils d'IA est exclu du champ de cette licence ;
+  - D'utiliser les données de l'API pour entraîner ou affiner (fine-tuning)
+    tout modèle, système ou algorithme d'IA ;
+  - D'intégrer l'API dans un pipeline automatisé piloté par l'IA sans
+    intervention humaine significative ;
+  - De rendre les données disponibles à tout système d'IA, agent autonome ou
+    bot d'apprentissage automatique.
+
+  En cas de doute sur le seuil « majoritaire », l'appréciation est laissée à la
+  bonne foi de l'Utilisateur. Le Titulaire se réserve le droit de révoquer la
+  licence si un usage contraire à l'esprit de cette clause est constaté.
+
+5. Absence de garantie
+
+L'API est fournie « en l'état », sans garantie d'aucune sorte, explicite ou
+implicite. Le Titulaire ne saurait être tenu responsable de tout dommage direct
+ou indirect résultant de l'utilisation de l'API.
+
+6. Résiliation
+
+La présente licence est automatiquement résiliée en cas de violation de l'une
+de ses conditions. En cas de résiliation, l'Utilisateur doit cesser
+immédiatement tout accès à l'API et supprimer les données issues de celle-ci de
+ses Projets.
+
+7. Droit applicable
+
+La présente licence est régie par le droit français. Tout litige sera soumis à
+la compétence exclusive des tribunaux français.
+
+================================================================================
+ENGLISH VERSION
+
+Non-Commercial Public Use License — No Artificial Intelligence (NCPUL-AI 1.0)
+
+1. Definitions
+
+  "API" means the public application programming interface made available by
+  the Licensor to access Dofus game data.
+
+  "Licensor" means the individual or entity that publishes and maintains the
+  API.
+
+  "User" means any individual or legal entity that accesses the API or uses
+  data obtained from it.
+
+  "Project" means any application, website, script, tool, service, or
+  derivative work using all or part of the data provided by the API.
+
+  "Artificial Intelligence (AI)" means any automated machine learning system,
+  neural network, large language model (LLM), content generation tool, or
+  similar system capable of producing, completing, transforming, or analyzing
+  content in an automated manner.
+
+2. Granted Rights
+
+Subject to compliance with these terms, the Licensor grants the User a
+non-exclusive, non-transferable, worldwide, royalty-free right to:
+
+  - Access the data provided by the API;
+  - Integrate this data into Projects for strictly non-commercial purposes;
+  - Share and distribute Projects based on this data, in accordance with these
+    terms.
+
+3. Mandatory Conditions
+
+3.1 Attribution
+
+  Any Project using the API must clearly include the following attribution in a
+  visible location (homepage, documentation, legal notices, README file, or
+  equivalent):
+
+    "Data sourced from DofusDB. Use subject to NCPUL-AI 1.0."
+
+3.2 ShareAlike
+
+  Any derivative Project must be distributed under the same terms as this
+  license or under a compatible license.
+
+4. Restrictions
+
+4.1 Non-Commercial Use Only
+
+  It is strictly prohibited to use the API or data derived from it for
+  commercial purposes, including but not limited to:
+
+  - Direct or indirect sale of data or services based on this data;
+  - Monetization through advertising, paid subscriptions, or any other business
+    model;
+  - Integration into a commercial product or service.
+
+4.2 Restrictions Related to Artificial Intelligence
+
+  The use of AI tools on a minor and incidental basis (autocompletion, code
+  suggestions, spell checking, etc.) is permitted, provided that the User
+  remains the primary author and responsible party for the Project.
+
+  However, the following are strictly prohibited:
+
+  - Generating a Project predominantly through AI: any Project whose structure,
+    code, content, or logic has been produced in majority (more than 50%) by AI
+    tools is excluded from the scope of this license;
+  - Using the API's data to train or fine-tune any AI model, system, or
+    algorithm;
+  - Integrating the API into any AI-driven automated pipeline without
+    meaningful human intervention;
+  - Making data available to any AI system, autonomous agent, or
+    machine-learning bot for ingestion or learning purposes.
+
+  In case of doubt regarding the "majority" threshold, this is left to the
+  User's good faith. The Licensor reserves the right to revoke the license if a
+  use contrary to the spirit of this clause is identified.
+
+5. Disclaimer of Warranties
+
+The API is provided "as is", without warranty of any kind, express or implied.
+The Licensor shall not be held liable for any direct or indirect damages
+resulting from the use of the API.
+
+6. Termination
+
+This license is automatically terminated upon violation of any of its terms.
+Upon termination, the User must immediately cease all access to the API and
+remove data derived from it from their Projects.
+
+7. Governing Law
+
+This license is governed by French law. Any disputes shall be subject to the
+exclusive jurisdiction of French courts.
+
+================================================================================
+LPNC-IA 1.0 / NCPUL-AI 1.0 — DofusDB — 2026
