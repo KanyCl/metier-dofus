@@ -1465,17 +1465,23 @@ function rafraichirCoutsPlan() {
     };
     ecrire("ingredients", formaterNombre(c.coutIngredients) + " k");
     ecrire("revente", "− " + formaterNombre(c.revente) + " k");
+
+    /* Tant qu'aucun prix n'est saisi, il n'y a pas de bilan à annoncer :
+       un « 0 k gagnés » laisserait croire que la montée est gratuite. */
+    const sansAucunPrix = c.coutIngredients === 0 && c.revente === 0;
     // Un total négatif est un gain : autant l'écrire en toutes lettres
-    // plutôt que de laisser lire un « moins » ambigu.
-    ecrire("net", c.net <= 0 ? formaterNombre(-c.net) + " k gagnés"
-                             : formaterNombre(c.net) + " k à sortir");
-    ecrire("parNiveau", c.parNiveau <= 0 ? formaterNombre(-c.parNiveau) + " k gagnés"
-                                         : formaterNombre(c.parNiveau) + " k");
+    // plutôt que de laisser lire un « moins » ambigu. Math.abs évite le
+    // « -0 » que produit l'opposé de zéro.
+    const enKamas = (v, gain, depense) =>
+        Math.round(v) <= 0 ? formaterNombre(Math.abs(v)) + gain
+                           : formaterNombre(v) + depense;
+    ecrire("net", sansAucunPrix ? "—" : enKamas(c.net, " k gagnés", " k à sortir"));
+    ecrire("parNiveau", sansAucunPrix ? "—" : enKamas(c.parNiveau, " k gagnés", " k"));
 
     const elNet = document.querySelector('[data-cout="net"]');
     if (elNet) {
-        elNet.classList.toggle("profit-positif", c.net <= 0);
-        elNet.classList.toggle("profit-negatif", c.net > 0);
+        elNet.classList.toggle("profit-positif", !sansAucunPrix && c.net <= 0);
+        elNet.classList.toggle("profit-negatif", !sansAucunPrix && c.net > 0);
     }
 
     const alerte = $("alertePrix");

@@ -7,7 +7,7 @@
     <!-- Le « ?v=… » force les navigateurs à retélécharger les fichiers après
          une mise à jour : sans lui, un iPhone peut garder l'ancien app.js en
          cache et afficher une page cassée. À CHANGER À CHAQUE PUBLICATION. -->
-    <link rel="stylesheet" href="style.css?v=2026-08-30f">
+    <link rel="stylesheet" href="style.css?v=2026-08-30g">
 </head>
 <body>
 
@@ -80,22 +80,28 @@
         <div class="bloc">
             <h2>🧮 D'où viennent ces chiffres ?</h2>
             <ul class="liste-regles">
-                <li>Crafter un objet <strong>exactement de ton niveau</strong> rapporte
-                    <strong>20 × ton niveau</strong> d'XP — soit précisément un niveau
-                    gagné en un seul craft.</li>
-                <li>Plus l'objet est <strong>en dessous</strong> de ton niveau, moins il
-                    rapporte : environ 90 % à 1 niveau d'écart, 75 % à 3, la moitié à 8,
-                    un quart à 22, presque plus rien à 55. C'est l'<strong>XP de craft
-                    dégressive</strong> dont parle la méthode.</li>
+                <li>Monter d'un niveau coûte <strong>20 × ton niveau</strong> d'XP —
+                    soit 398 000 XP pour aller de 1 à 200.</li>
+                <li>Ce que rapporte un craft dépend du <strong>seul niveau de la
+                    recette</strong>, environ <strong>4/3</strong> de ce niveau. Ce n'est
+                    pas une formule devinée : c'est une table <strong>calibrée sur des
+                    mesures</strong> relevées sur l'outil
+                    <a href="https://dofusdb.fr/fr/tools/jobs-xp" target="_blank" rel="noopener">XP Métier de DofusDB</a>
+                    (Chasseur, 1 → 200, par tranches de dix).</li>
                 <li>Le <strong>nombre de cases</strong> d'une recette est limité par ton
                     niveau : 2 cases au niveau 1, 3 au niveau 10, 4 au niveau 20, puis
                     +1 tous les 20 niveaux. Une recette trop grande est écartée.</li>
             </ul>
             <p class="petite-note">
-                ⚠️ Ankama ne publie pas de formule officielle : ces règles viennent des
-                relevés de la communauté. Elles sont regroupées en haut de
-                <code>xp.js</code> pour rester faciles à ajuster, et vérifiées par
-                <code>test-xp.js</code> (en console : <code>lancerTestsXp()</code>).
+                ⚠️ <strong>Ce que ces mesures ne disent pas.</strong> Dans le plan de
+                DofusDB, chaque recette sert sur les dix niveaux qui la suivent : l'écart
+                entre ton métier et la recette va toujours de 0 à 9. Une perte d'XP liée à
+                cet écart y est donc <em>absorbée</em>, invisible. Les valeurs sont l'XP
+                <em>moyenne</em> sur ces dix niveaux — la bonne valeur tant que tu crafts
+                près de ton niveau, ce que fait ce plan. Au-delà, l'outil affiche
+                « ≤ » : il annonce un majorant, pas une prévision. Le calibrage ne porte
+                pour l'instant que sur le <strong>Chasseur</strong>.
+                Pour revérifier : <code>lancerTestsXp()</code> dans la console (F12).
             </p>
         </div>
     </section>
@@ -506,13 +512,13 @@
         </p>
     </footer>
 
-    <script src="xp.js?v=2026-08-30f"></script>
-    <script src="feuille-route.js?v=2026-08-30f"></script>
-    <script src="methode.js?v=2026-08-30f"></script>
-    <script src="recolte.js?v=2026-08-30f"></script>
-    <script src="app.js?v=2026-08-30f"></script>
+    <script src="xp.js?v=2026-08-30g"></script>
+    <script src="feuille-route.js?v=2026-08-30g"></script>
+    <script src="methode.js?v=2026-08-30g"></script>
+    <script src="recolte.js?v=2026-08-30g"></script>
+    <script src="app.js?v=2026-08-30g"></script>
     <!-- Contrôles du moteur d'XP : ne s'exécutent pas tout seuls.
          Tape lancerTestsXp() dans la console du navigateur (F12). -->
-    <script src="test-xp.js?v=2026-08-30f"></script>
+    <script src="test-xp.js?v=2026-08-30g"></script>
 </body>
 </html>
