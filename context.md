@@ -126,7 +126,6 @@ que `calculerRatios` reproduit les chiffres du guide.
   l'outil aujourd'hui.
 - Un comparateur côte à côte de deux crafts sur les deux ratios.
 - Un rappel Almanax du jour (offrande → ressources concernées).
-- Cocher les paliers atteints métier par métier dans l'onglet Méthode.
 
 ## Rappel
 
@@ -298,3 +297,35 @@ sur les cartes de recette, et une alerte sur les paliers concernés.
 **Ce qui trancherait.** Un relevé où une même recette sert sur beaucoup plus de dix
 niveaux — ou, plus simple, l'XP réellement gagnée en jeu sur un craft bas niveau à
 haut niveau de métier. Une seule mesure de ce genre suffirait à calibrer la chute.
+
+## 15 septembre 2026 — la frise des paliers sait où j'en suis
+
+Dernière piste de la liste du 30 août : l'onglet 🧭 La méthode affichait les
+paliers de chaque métier sans jamais dire lesquels étaient derrière moi. Il fallait
+comparer de tête avec l'onglet « Mes métiers ».
+
+Les paliers se cochent maintenant **tout seuls**. Aucune saisie en plus : le niveau
+déjà enregistré dans 🛠️ Mes métiers suffit.
+
+- Palier passé → ✅ et affichage estompé.
+- Palier suivant → badge de niveau surligné et « plus que N niveaux ».
+- Compteur dans l'en-tête du métier : `niveau 60 · 3/7 paliers`.
+- Tous les paliers passés → « 🏁 Tous les paliers de ce métier sont derrière toi ».
+
+Trois cas qui demandaient de l'attention :
+
+1. **Deux paliers au même niveau** (Alchimiste 60 en a deux). Le « prochain » se
+   repère par son *niveau*, pas par son objet — sinon un seul des deux serait
+   signalé.
+2. **Les entrées génériques.** « Métiers de craft d'équipement » et « Métiers de
+   forgemagie » désignent une famille, pas un métier : elles n'ont pas de niveau
+   et restent neutres. `niveauDuMetierNomme` renvoie `null` pour elles.
+3. **L'ordre de démarrage.** `afficherMethode()` s'exécute avant la réponse de
+   l'API : à ce moment la liste des métiers est vide et rien n'est coché. La frise
+   est refaite dans `enregistrerMetiers()`, puis à chaque changement de niveau via
+   `surChangementDeNiveau`.
+
+### Vérification
+12 contrôles sur les six cas ci-dessus, joués sur les vraies données de
+`methode.js` dans Chrome headless (`--dump-dom`) : 12/12. La page complète se
+charge ensuite sans erreur, les 8 blocs de métiers sont rendus.

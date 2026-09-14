@@ -1012,28 +1012,57 @@ function cartesTexte(liste, cleTitre, cleTexte) {
     `).join("");
 }
 
+/* Le niveau enregistré d'un métier désigné par son NOM dans methode.js.
+   Renvoie null quand l'entrée ne désigne pas un métier précis : les lignes
+   « Métiers de craft d'équipement » et « Métiers de forgemagie » parlent
+   d'une famille entière, qui n'a aucun niveau à elle. Renvoie null aussi
+   tant que l'API n'a pas répondu — on ne coche rien à l'aveugle. */
+function niveauDuMetierNomme(nom) {
+    const m = tousLesMetiers.find((x) => loc(x.name) === nom);
+    return m ? niveauDuMetier(m.id) : null;
+}
+
 function afficherPaliers() {
-    $("listePaliers").innerHTML = PALIERS_METIERS.map((m) => `
+    $("listePaliers").innerHTML = PALIERS_METIERS.map((m) => {
+        const niveau = niveauDuMetierNomme(m.metier);
+        // 0 = métier pas commencé : la frise reste neutre, comme avant.
+        const situe = niveau > 0;
+        const atteints = situe ? m.paliers.filter((p) => p.niveau <= niveau).length : 0;
+
+        // Le prochain palier, par son niveau — pas par son objet : deux paliers
+        // peuvent partager le même niveau (Alchimiste 60), et les deux sont
+        // alors « le prochain ».
+        const suivant = situe ? m.paliers.find((p) => p.niveau > niveau) : null;
+        const niveauSuivant = suivant ? suivant.niveau : null;
+
+        return `
         <div class="metier-paliers famille-${m.famille}">
             <div class="metier-entete">
                 <h3>${m.metier}</h3>
                 <span class="metier-famille">${m.famille}</span>
+                ${situe ? `<span class="metier-avancement">niveau ${niveau} · ${atteints}/${m.paliers.length} paliers</span>` : ""}
             </div>
             <p class="metier-resume">${m.resume}</p>
             <div class="frise">
-                ${m.paliers.map((p) => `
-                    <div class="palier">
+                ${m.paliers.map((p) => {
+                    const atteint  = situe && p.niveau <= niveau;
+                    const prochain = situe && p.niveau === niveauSuivant;
+                    const etat = atteint ? " atteint" : prochain ? " prochain" : "";
+                    return `
+                    <div class="palier${etat}">
                         <span class="palier-niveau">${p.niveau}</span>
                         <div class="palier-corps">
-                            <div class="palier-quoi">${p.quoi}</div>
+                            <div class="palier-quoi">${atteint ? "✅ " : ""}${p.quoi}</div>
                             <div class="palier-pourquoi">${p.pourquoi}</div>
+                            ${prochain ? `<div class="palier-reste">👉 Le prochain : plus que ${p.niveau - niveau} niveaux.</div>` : ""}
                         </div>
-                    </div>
-                `).join("")}
+                    </div>`;
+                }).join("")}
             </div>
+            ${situe && !suivant ? `<p class="petite-note">🏁 Tous les paliers de ce métier sont derrière toi.</p>` : ""}
             ${m.note ? `<p class="petite-note">⚠️ ${m.note}</p>` : ""}
-        </div>
-    `).join("");
+        </div>`;
+    }).join("");
 }
 
 function afficherCouples() {
@@ -1213,6 +1242,9 @@ function surChangementDeNiveau(fonction) {
 function enregistrerMetiers(metiers) {
     tousLesMetiers = metiers.slice().sort((a, b) => loc(a.name).localeCompare(loc(b.name)));
     afficherMesMetiers();
+    // La frise de l'onglet Méthode a été rendue avant la réponse de l'API,
+    // donc sans savoir où j'en suis : on la refait maintenant qu'on le sait.
+    afficherPaliers();
 }
 
 function afficherMesMetiers() {
@@ -1682,6 +1714,8 @@ function brancherOptimisation() {
     });
 
     surChangementDeNiveau(remplirMetiersOptimisation);
+    // Un niveau qui change recoche la frise des paliers, dans l'onglet Méthode.
+    surChangementDeNiveau(afficherPaliers);
 }
 
 

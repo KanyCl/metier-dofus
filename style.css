@@ -637,6 +637,25 @@ code {
 .palier-quoi     { font-weight: bold; font-size: 0.9rem; }
 .palier-pourquoi { font-size: 0.82rem; color: var(--texte-doux); }
 
+/* Où j'en suis dans cette frise — piloté par l'onglet « Mes métiers ». */
+.metier-avancement {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--vert);
+    border: 1px solid var(--vert);
+    border-radius: 10px;
+    padding: 1px 8px;
+}
+.palier.atteint .palier-niveau  { color: var(--vert); border-color: var(--vert); }
+.palier.atteint .palier-corps   { opacity: 0.55; }
+.palier.prochain .palier-niveau {
+    color: var(--fond);
+    background: var(--jaune);
+    border-color: var(--jaune);
+}
+.palier-reste { font-size: 0.8rem; color: var(--jaune); margin-top: 3px; }
+
 /* ---------- Couples de synergie ---------- */
 .couple {
     background: var(--fond-carte2);
