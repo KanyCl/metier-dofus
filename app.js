@@ -1723,7 +1723,22 @@ function brancherOptimisation() {
    14) LES ONGLETS
    ============================================================ */
 
+/* Les onglets affichés aujourd'hui. Les autres ne sont PAS supprimés : leurs
+   sections restent dans la page et leur code continue de tourner, seul leur
+   bouton est masqué et on ne peut plus y basculer.
+   👉 Pour en remettre un en service, ajoute son nom dans cette liste. C'est la
+   seule ligne à toucher — rien d'autre n'a été retiré.
+   Noms possibles : recettes · calculette · optim · metiers · plan · recolte · methode */
+const ONGLETS_VISIBLES = ["calculette", "tremplin", "metiers"];
+
+function estOngletVisible(nom) {
+    return ONGLETS_VISIBLES.includes(nom);
+}
+
 function activerOnglet(nom) {
+    // Un onglet masqué n'est plus atteignable : on retombe sur le premier visible.
+    if (!estOngletVisible(nom)) nom = ONGLETS_VISIBLES[0];
+
     document.querySelectorAll(".onglet").forEach((b) =>
         b.classList.toggle("actif", b.dataset.onglet === nom));
     document.querySelectorAll(".vue").forEach((v) =>
@@ -1737,6 +1752,8 @@ function activerOnglet(nom) {
 
 function brancherOnglets() {
     document.querySelectorAll(".onglet").forEach((bouton) => {
+        // On masque le bouton des onglets mis de côté (voir ONGLETS_VISIBLES).
+        bouton.hidden = !estOngletVisible(bouton.dataset.onglet);
         bouton.addEventListener("click", () => activerOnglet(bouton.dataset.onglet));
     });
 
@@ -1749,12 +1766,1281 @@ function brancherOnglets() {
             window.scrollTo({ top: 0, behavior: "smooth" });
         });
     });
-    // On rouvre l'outil sur le dernier onglet consulté.
+    /* On rouvre l'outil sur le dernier onglet consulté — sauf s'il a été mis
+       de côté depuis, auquel cas activerOnglet retombe sur le premier visible. */
     const dernier = localStorage.getItem("dofus_onglet");
     const existe = dernier && document.querySelector(`.onglet[data-onglet="${dernier}"]`);
-    activerOnglet(existe ? dernier : "recettes");
+    activerOnglet(existe ? dernier : ONGLETS_VISIBLES[0]);
 }
 
+
+/* ============================================================
+   15) CALCULETTE LIBRE
+   ------------------------------------------------------------
+   Rien ici ne vient de DofusDB : tous les chiffres sont saisis à
+   la main. C'est le pendant de l'onglet Rentabilité pour ce que
+   l'API ne connaît pas — un craft absent, un achat-revente, ou
+   simplement un prix relevé en jeu qu'on veut vérifier.
+
+   Les crafts chiffrés vivent dans leur propre carnet
+   (`dofus_calculette`) : ils ne portent aucun identifiant DofusDB,
+   ils ne peuvent donc pas rejoindre `dofus_prix` sans risquer d'y
+   écraser le prix d'un vrai objet.
+   ============================================================ */
+
+/* Taxe prélevée par l'HDV à la mise en vente, en % du prix affiché.
+   Valeur de DÉPART seulement : le champ reste modifiable, parce que le
+   taux dépend du mode de vente et n'est pas une constante du jeu. */
+const TAXE_HDV_DEFAUT = 2;
+
+/* En dessous de ce pourcentage de marge, le craft est annoncé comme
+   « juste » : un ingrédient qui monte un peu, un concurrent qui casse
+   le prix, et le bénéfice a disparu. Repère de prudence, pas une
+   règle du jeu. */
+const MARGE_CONFORTABLE = 15;
+
+// Le tableau comparatif, tel qu'il est enregistré dans le navigateur.
+let craftsCompares = chargerJSON("dofus_calculette", []);
+
+/* Le craft en cours de saisie. `id` non nul → on modifie une ligne du tableau.
+   Il est relu du navigateur au démarrage : une fiche à moitié remplie survit
+   à un rechargement de page, à une fermeture d'onglet, à un téléphone qui met
+   le navigateur en veille. Rien de ce qui est tapé ne se perd. */
+let calcBrouillon = chargerJSON("dofus_calc_brouillon", null) || calcVierge();
+
+// Remet d'aplomb une fiche relue du navigateur (ancienne version, données abîmées).
+function calcNormaliser(brouillon) {
+    const propre = { ...calcVierge(), ...(brouillon || {}) };
+    if (!Array.isArray(propre.lignes) || !propre.lignes.length) {
+        propre.lignes = [{ nom: "", qte: 1, prix: 0 }];
+    }
+    return propre;
+}
+calcBrouillon = calcNormaliser(calcBrouillon);
+
+function calcVierge() {
+    return {
+        id: null,
+        // Identifiant DofusDB de l'objet fini, quand le craft vient du jeu.
+        // `null` = fiche tapée entièrement à la main.
+        resultId: null,
+        nom: "",
+        // L'icône de l'objet, quand il vient du jeu — on la garde avec la
+        // fiche pour que le tableau reste illustré sans rappeler l'API.
+        img: "",
+        lignes: [{ nom: "", qte: 1, prix: 0 }],
+        prixVente: 0,
+        ventes30: 0,
+        taxePct: TAXE_HDV_DEFAUT
+    };
+}
+
+/* Lit un nombre tapé à la main. Accepte la virgule décimale, et rend 0
+   plutôt que NaN sur un champ vide — sinon le « NaN » se propage dans
+   tout le calcul dès qu'une case n'est pas remplie. */
+function nombreSaisi(valeur) {
+    const n = parseFloat(String(valeur == null ? "" : valeur).replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+}
+
+/* Le calcul, en un seul endroit.
+   coût → prix de vente → taxe → ce que je touche vraiment → bénéfice.
+   Les trois indicateurs de fin sont ceux de l'onglet Rentabilité (voir
+   calculerRatios) : mêmes formules, mêmes conventions, pour que deux
+   crafts venus des deux onglets restent comparables. */
+function chiffrerCraft(craft) {
+    let cout = 0;
+    (craft.lignes || []).forEach((l) => {
+        cout += nombreSaisi(l.qte) * nombreSaisi(l.prix);
+    });
+
+    const prixVente = nombreSaisi(craft.prixVente);
+    const taxe = prixVente * (nombreSaisi(craft.taxePct) / 100);
+    const netVente = prixVente - taxe;
+    const profit = netVente - cout;
+
+    // Marge en % du prix affiché — même convention que l'onglet Rentabilité.
+    const margePct = prixVente > 0 ? (profit / prixVente) * 100 : 0;
+    const ventesJour = nombreSaisi(craft.ventes30) / 30;
+
+    return {
+        cout, prixVente, taxe, netVente, profit, margePct, ventesJour,
+        margeJour: profit * ventesJour,
+        indice: ventesJour * margePct
+    };
+}
+
+/* Un craft rangé dans le tableau garde ses propres prix… sauf pour ce que le
+   jeu connaît. Dès qu'une ligne porte un identifiant DofusDB, son prix est relu
+   dans le carnet commun : corriger le prix du Bois de Frêne quelque part met à
+   jour TOUS les crafts qui en utilisent, sans avoir à les rouvrir un par un.
+   Une ligne tapée à la main n'a pas d'identifiant : elle garde sa valeur, il
+   n'y a rien d'autre à lire. */
+function craftAJour(craft) {
+    const aJour = { ...craft, lignes: (craft.lignes || []).map((l) => ({ ...l })) };
+    aJour.lignes.forEach((l) => {
+        if (l.id != null && prix[l.id] != null) l.prix = prix[l.id];
+    });
+    if (aJour.resultId != null) {
+        if (prix[aJour.resultId] != null) aJour.prixVente = prix[aJour.resultId];
+        if (ventes[aJour.resultId] != null) aJour.ventes30 = ventes[aJour.resultId];
+    }
+    return aJour;
+}
+
+// Y a-t-il assez de chiffres pour que le verdict veuille dire quelque chose ?
+function calcRenseigne(craft) {
+    const r = chiffrerCraft(craft);
+    return r.cout > 0 || r.prixVente > 0;
+}
+
+function verdictDe(r) {
+    if (r.profit > 0 && r.margePct >= MARGE_CONFORTABLE) {
+        return {
+            classe: "verdict-bon",
+            titre: "✅ Rentable",
+            texte: "Le bénéfice tient même si un prix bouge un peu."
+        };
+    }
+    if (r.profit > 0) {
+        return {
+            classe: "verdict-juste",
+            titre: "⚠️ Rentable, mais de justesse",
+            texte: "Moins de " + MARGE_CONFORTABLE + " % de marge : un ingrédient qui monte " +
+                   "ou un concurrent qui casse le prix efface le bénéfice."
+        };
+    }
+    if (r.profit === 0) {
+        return {
+            classe: "verdict-juste",
+            titre: "➖ Tu rentres tout juste dans tes frais",
+            texte: "Ni gain ni perte — et ton temps de craft n'est pas payé."
+        };
+    }
+    return {
+        classe: "verdict-mauvais",
+        titre: "❌ Tu perds des kamas",
+        texte: "Revendre les ingrédients tels quels rapporterait davantage."
+    };
+}
+
+
+/* ---------- Les lignes d'ingrédients ---------- */
+
+/* Redessine la liste complète. À n'appeler QUE sur ajout ou suppression :
+   pendant la frappe, refaire le HTML ferait perdre le curseur du champ en
+   cours de saisie. */
+function afficherLignesCalc() {
+    $("calcLignes").innerHTML = calcBrouillon.lignes.map((ligne, i) => {
+        /* Une ligne venue du jeu porte l'identifiant DofusDB de l'ingrédient :
+           son nom et sa quantité sont ceux de la recette officielle, on ne les
+           retouche pas. Il ne reste que le prix à saisir — c'est tout l'intérêt
+           de la recherche. Une ligne tapée à la main reste modifiable partout. */
+        const duJeu = ligne.id != null;
+        const identite = duJeu
+            ? `<span class="calc-ing-fixe">${echapper(ligne.nom)}</span>
+               <span class="calc-x">×</span>
+               <span class="calc-qte-fixe">${echapper(ligne.qte)}</span>`
+            : `<input type="text" class="calc-ing-nom" data-champ="nom" placeholder="ingrédient"
+                      value="${echapper(ligne.nom)}">
+               <span class="calc-x">×</span>
+               <input type="number" class="calc-ing-qte" data-champ="qte" min="0" step="1"
+                      value="${echapper(ligne.qte)}">`;
+        return `
+        <div class="calc-ligne${duJeu ? " calc-ligne-jeu" : ""}" data-index="${i}">
+            ${identite}
+            <span class="calc-x">à</span>
+            <input type="number" class="calc-ing-prix" data-champ="prix" min="0" step="1"
+                   value="${echapper(ligne.prix)}" placeholder="0">
+            <span class="calc-sous-total" data-total="${i}"></span>
+            ${duJeu ? `<button type="button" class="calc-ou" data-ou-sert="${ligne.id}"
+                    title="Voir les autres crafts qui utilisent cet ingrédient">🔗</button>` : ""}
+            <button type="button" class="calc-retirer" data-retirer="${i}"
+                    title="Retirer cette ligne">✕</button>
+        </div>`;
+    }).join("");
+    rafraichirCalc();
+}
+
+
+/* ---------- Chercher un craft dans les données du jeu ---------- */
+
+// Au-delà, la liste de propositions devient illisible sur un téléphone.
+const CALC_MAX_RESULTATS = 25;
+
+/* Combien de pages de 50 on accepte de parcourir. « potion » correspond à
+   114 crafts : en rester à une seule page en cachait la plus grande partie,
+   dont la Potion de Vieillesse. Quatre pages couvrent tous les termes courants
+   et, au-delà, l'outil le DIT au lieu de tronquer en silence. */
+const CALC_PAGES_MAX = 4;
+
+/* Les réponses n'arrivent pas forcément dans l'ordre où on les demande : une
+   recherche lancée tôt peut revenir APRÈS une plus récente et écraser ses
+   résultats. Chaque recherche porte un numéro ; seule la dernière écrit à
+   l'écran. */
+let calcNumeroRecherche = 0;
+
+/* Classe un nom par rapport à ce qui a été tapé. Trier par niveau seul mettait
+   la Potion de Vieillesse (niveau 95) tout en bas d'une recherche « potion »,
+   derrière vingt potions de niveau 20 — puis hors de la liste. Plus le score
+   est bas, plus le résultat est pertinent. */
+function scorePertinence(nom, saisie, mots) {
+    const n = sansAccent(nom);
+    const complet = sansAccent(saisie).replace(/\s+/g, " ").trim();
+
+    if (n === complet) return 0;                       // le nom exact
+    if (n.startsWith(complet)) return 1;               // commence par ce qu'on a tapé
+
+    // Chaque mot tapé commence un mot du nom (« pot vie » → « Potion de Vieillesse »).
+    // Découpage manuel plutôt qu'une expression régulière : la saisie peut
+    // contenir des caractères qui auraient un sens dans une regex.
+    const motsDuNom = n.split(/[^a-z0-9]+/).filter(Boolean);
+    if (mots.every((m) => motsDuNom.some((w) => w.startsWith(m)))) return 2;
+
+    return 3;                                          // les mots sont là, ailleurs
+}
+
+/* Renvoie { total, examines, retenus, affiches } plutôt qu'une simple liste :
+   l'affichage a besoin de savoir ce qu'il ne montre PAS. */
+async function chercherCraftsDuJeu(saisie) {
+    const vide = { total: 0, examines: 0, retenus: 0, affiches: [] };
+    const mots = sansAccent(saisie).split(/\s+/).filter((m) => m.length >= 2);
+    if (!mots.length) return vide;
+
+    /* L'API ne sait chercher qu'UN mot à la fois — « epee boisaille » ne
+       renvoie rien du tout. On lui donne le plus long, le plus discriminant,
+       et on filtre nous-mêmes sur les autres mots. */
+    const pivot = mots.reduce((a, b) => (b.length > a.length ? b : a));
+
+    /* On cherche sur le SLUG, pas sur le nom : le slug est sans accent, donc
+       « epee » trouve « Épée de Boisaille ». Sur `resultName.fr`, la recherche
+       est accent-sensible et il faudrait taper l'accent au clavier.
+       ⚠️ `img` est calculé à partir de `iconId` : sans `iconId` dans le
+       $select, l'API renvoie l'image « undefined.png ». */
+    const champs = ["id", "name", "level", "iconId", "img", "recipeSlots"]
+        .map((c) => "$select[]=" + c).join("&");
+
+    /* `recipeSlots[$gt]=0` fait le tri des objets craftables CÔTÉ SERVEUR :
+       « potion » passe de 315 objets à 114 crafts. Sans ça, une page de 50
+       objets pouvait ne contenir presque que des ressources brutes, et le
+       craft cherché se trouvait au-delà.
+       Vérifié dans les deux sens : les ressources brutes sont à 0, les objets
+       craftables portent leur nombre d'ingrédients. Ça évite d'interroger
+       /recipes pour chaque candidat — cette route renvoie ~15 Ko par recette
+       quoi qu'on demande, le $select n'y change rien. */
+    const base = "/items?slug.fr[$search]=" + encodeURIComponent(pivot)
+        + "&recipeSlots[$gt]=0&lang=fr&" + champs;
+
+    let objets = [];
+    let total = 0;
+    for (let page = 0; page < CALC_PAGES_MAX; page++) {
+        const data = await appelAPI(base + "&$limit=50&$skip=" + page * 50);
+        total = data.total ?? 0;
+        const lot = data.data || [];
+        objets = objets.concat(lot);
+        if (!lot.length || objets.length >= total) break;
+    }
+
+    const retenus = objets
+        // Ceinture et bretelles : si le filtre serveur était un jour ignoré,
+        // les ressources brutes ne remonteraient pas pour autant.
+        .filter((o) => (o.recipeSlots || 0) > 0)
+        .filter((o) => {
+            const nom = sansAccent(loc(o.name));
+            return mots.every((m) => nom.includes(m));
+        })
+        .map((o) => ({ objet: o, score: scorePertinence(loc(o.name), saisie, mots) }))
+        .sort((a, b) => a.score - b.score
+            || (a.objet.level || 0) - (b.objet.level || 0)
+            || loc(a.objet.name).localeCompare(loc(b.objet.name), "fr"))
+        .map((x) => x.objet);
+
+    return {
+        total,                      // crafts portant le mot pivot, d'après l'API
+        examines: objets.length,    // ce qu'on a réellement regardé
+        retenus: retenus.length,    // ce qui correspond à TOUS les mots tapés
+        affiches: retenus.slice(0, CALC_MAX_RESULTATS)
+    };
+}
+
+function viderResultatsRecherche() { $("calcResultats").innerHTML = ""; }
+
+function messageRecherche(texte) {
+    $("calcResultats").innerHTML = `<p class="calc-cherche">${echapper(texte)}</p>`;
+}
+
+function afficherResultatsRecherche(resultat) {
+    const { affiches, retenus, total, examines } = resultat;
+    if (!affiches.length) {
+        messageRecherche("Aucun craft ne porte ce nom.");
+        return;
+    }
+
+    /* Une liste tronquée en silence est un piège : on cherche « potion », on
+       ne voit pas la Potion de Vieillesse, et on en conclut qu'elle n'existe
+       pas. Tant qu'il reste quelque chose derrière, on le dit. */
+    const avertissements = [];
+    if (retenus > affiches.length) {
+        avertissements.push(`<strong>${retenus} crafts</strong> correspondent — voici les
+            ${affiches.length} plus proches de ce que tu as tapé.`);
+    }
+    if (examines < total) {
+        avertissements.push(`Je n'ai regardé que ${examines} des ${total} crafts contenant
+            ce mot.`);
+    }
+    const note = avertissements.length
+        ? `<p class="calc-cherche">${avertissements.join(" ")}
+               Ajoute un mot pour préciser (ex. « potion vieillesse »).</p>`
+        : "";
+
+    $("calcResultats").innerHTML = note + affiches.map((o) => `
+        <button type="button" class="calc-resultat" data-ouvrir="${o.id}">
+            <img src="${echapper(o.img)}" alt="" class="calc-resultat-img" loading="lazy">
+            <span class="calc-resultat-nom">${echapper(loc(o.name))}</span>
+            <span class="calc-resultat-niveau">niv. ${o.level || "?"}</span>
+        </button>`).join("");
+}
+
+/* ---------- « Où sert cet objet ? » ---------- */
+
+/* Au-delà, on télécharge beaucoup pour rien : la route /recipes renvoie ~12 Ko
+   par recette quoi qu'on lui demande. Le compte réel est affiché quand il
+   dépasse cette limite. */
+const CALC_MAX_USAGES = 24;
+
+// Même garde-fou que la recherche : seule la dernière demande écrit à l'écran.
+let calcNumeroUsages = 0;
+
+/* Chiffre une recette avec les prix DÉJÀ connus du carnet, sans rien demander
+   à l'utilisateur. Sert à répondre « et ce craft-là, il vaut quoi ? » sans
+   quitter la fiche en cours. */
+function apercuDepuisLeCarnet(recette) {
+    const ids = recette.ingredientIds || [];
+    const lignes = ids.map((id, i) => ({
+        qte: (recette.quantities || [])[i] || 1,
+        prix: prix[id] || 0
+    }));
+    const chiffres = chiffrerCraft({
+        lignes,
+        prixVente: prix[recette.resultId] || 0,
+        ventes30: ventes[recette.resultId] || 0,
+        // La taxe réglée en haut de la calculette s'applique aussi ici.
+        taxePct: nombreSaisi($("calcTaxe").value) || TAXE_HDV_DEFAUT
+    });
+    return {
+        ...chiffres,
+        // Un coût calculé sur des prix manquants est un coût sous-estimé : il
+        // faut le dire, sinon l'aperçu ment par omission.
+        manquants: ids.filter((id) => !prix[id]).length,
+        nbIngredients: ids.length
+    };
+}
+
+function viderOuSert() { $("calcOuSert").innerHTML = ""; }
+
+function messageOuSert(texte) {
+    $("calcOuSert").innerHTML = `<p class="calc-cherche">${echapper(texte)}</p>`;
+}
+
+/* Liste les crafts qui consomment cet objet, avec pour chacun ce qu'il coûte
+   et ce qu'il se vend d'après le carnet. */
+async function afficherOuSert(idObjet, nomConnu) {
+    const numero = ++calcNumeroUsages;
+    /* Le cache des objets est vidé à chaque rechargement de page : sur une fiche
+       relue du navigateur, on n'a que le nom stocké dans la ligne. */
+    const nom = nomConnu || (cacheObjets[idObjet] && cacheObjets[idObjet].nom) || "cet objet";
+    messageOuSert("Recherche des crafts qui utilisent « " + nom + " »…");
+    try {
+        const data = await appelAPI("/recipes?ingredientIds[$in][]=" + idObjet
+            + "&$limit=" + CALC_MAX_USAGES + "&lang=fr");
+        if (numero !== calcNumeroUsages) return;
+
+        const recettes = data.data || [];
+        const total = data.total ?? recettes.length;
+        if (!recettes.length) {
+            messageOuSert("« " + nom + " » n'entre dans aucune recette connue.");
+            return;
+        }
+
+        const monPrix = prix[idObjet] || 0;
+        const lignes = recettes
+            .map((r) => ({ recette: r, apercu: apercuDepuisLeCarnet(r) }))
+            // Le plus rentable d'abord, mais ceux dont on ignore le prix de
+            // vente restent en bas : leur bénéfice affiché ne veut rien dire.
+            .sort((a, b) => (b.apercu.prixVente > 0) - (a.apercu.prixVente > 0)
+                || b.apercu.profit - a.apercu.profit);
+
+        $("calcOuSert").innerHTML = `
+            <div class="ou-sert-entete">
+                🔗 <strong>${echapper(nom)}</strong> sert dans
+                ${total} craft${total > 1 ? "s" : ""}${total > recettes.length
+                    ? ` — les ${recettes.length} premiers` : ""}.
+                ${monPrix > 0
+                    ? `Tu l'as noté à <strong>${formaterNombre(monPrix)} k</strong> l'unité.`
+                    : `Tu n'as pas encore noté son prix.`}
+                <button type="button" class="lien-onglet" id="ouSertFermer">fermer</button>
+            </div>
+            <div class="ou-sert-liste">
+                ${lignes.map(({ recette, apercu }) => ligneOuSert(recette, apercu)).join("")}
+            </div>
+            <p class="petite-note">
+                Les coûts viennent de ton carnet de prix. Clique sur un craft pour
+                l'ouvrir dans la calculette et compléter ce qui manque.
+            </p>`;
+    } catch (e) {
+        if (numero !== calcNumeroUsages) return;
+        console.error(e);
+        messageOuSert("❌ Impossible de chercher les crafts. Vérifie ta connexion.");
+    }
+}
+
+function ligneOuSert(recette, a) {
+    const nom = loc(recette.resultName) || ("Objet #" + recette.resultId);
+    const coutSur = a.manquants === 0;
+    const vendable = a.prixVente > 0;
+
+    const cout = coutSur
+        ? formaterNombre(a.cout) + " k"
+        : `<span class="cout-partiel" title="${a.manquants} prix d'ingrédient manquant(s)">≥ ${formaterNombre(a.cout)} k</span>`;
+
+    const verdict = vendable
+        ? `<span class="${a.profit >= 0 ? "profit-positif" : "profit-negatif"}">
+               ${a.profit >= 0 ? "+" : ""}${formaterNombre(a.profit)} k · ${a.margePct.toFixed(1)} %
+           </span>${coutSur ? "" : ' <span class="cout-partiel">(au mieux)</span>'}`
+        : `<span class="ou-sert-inconnu">prix de vente à renseigner</span>`;
+
+    return `
+        <button type="button" class="ou-sert-craft" data-ouvrir="${recette.resultId}">
+            <span class="ou-sert-nom">${echapper(nom)}</span>
+            <span class="ou-sert-niveau">niv. ${recette.resultLevel || "?"}</span>
+            <span class="ou-sert-chiffres">
+                craft ${cout} · vente ${vendable ? formaterNombre(a.prixVente) + " k" : "—"}
+            </span>
+            <span class="ou-sert-verdict">${verdict}</span>
+        </button>`;
+}
+
+
+/* Charge la recette officielle et remplit la calculette : les ingrédients et
+   leurs quantités sont posés, il ne reste qu'à saisir les prix. */
+async function ouvrirCraftDuJeu(idObjet) {
+    messageRecherche("Chargement de la recette…");
+    try {
+        const data = await appelAPI("/recipes?resultId=" + idObjet + "&$limit=1&lang=fr");
+        const recette = (data.data || [])[0];
+        if (!recette) { messageRecherche("Cet objet n'a finalement pas de recette."); return; }
+
+        await chargerObjets([recette.resultId, ...(recette.ingredientIds || [])]);
+
+        calcBrouillon = {
+            id: null,
+            resultId: recette.resultId,
+            nom: cacheObjets[recette.resultId].nom,
+            img: cacheObjets[recette.resultId].img || "",
+            lignes: (recette.ingredientIds || []).map((idIng, i) => ({
+                id: idIng,
+                nom: cacheObjets[idIng].nom,
+                qte: (recette.quantities || [])[i] || 1,
+                // Carnet partagé : un prix déjà saisi dans un autre onglet revient ici.
+                prix: prix[idIng] || 0
+            })),
+            prixVente: prix[recette.resultId] || 0,
+            ventes30: ventes[recette.resultId] || 0,
+            // On garde la taxe que l'utilisateur a réglée, il ne la retape pas.
+            taxePct: nombreSaisi($("calcTaxe").value) || TAXE_HDV_DEFAUT
+        };
+        // Une recette sans ingrédient ne doit pas laisser la calculette sans ligne.
+        if (!calcBrouillon.lignes.length) calcBrouillon.lignes = [{ nom: "", qte: 1, prix: 0 }];
+
+        chargerBrouillonDansLaPage();
+        afficherTableauCompare();
+        $("calcRecherche").value = "";
+        viderResultatsRecherche();
+        // Le panneau « où ça sert » parlait de l'objet précédent : il ne doit
+        // pas rester affiché au-dessus d'une autre fiche.
+        calcNumeroUsages++;
+        viderOuSert();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+        console.error(e);
+        messageRecherche("❌ Impossible de charger la recette. Vérifie ta connexion.");
+    }
+}
+
+
+/* ---------- Le résumé et le verdict ---------- */
+
+function rafraichirCalc() {
+    const r = chiffrerCraft(calcBrouillon);
+
+    /* On enregistre à chaque frappe. C'est le seul endroit par où passent
+       TOUTES les modifications de la fiche : le poser ici garantit qu'aucune
+       saisie ne peut échapper à la sauvegarde. */
+    sauverJSON("dofus_calc_brouillon", calcBrouillon);
+
+    // Le total de chaque ligne, affiché à droite de sa saisie.
+    calcBrouillon.lignes.forEach((ligne, i) => {
+        const cible = $("calcLignes").querySelector(`[data-total="${i}"]`);
+        if (!cible) return;
+        const total = nombreSaisi(ligne.qte) * nombreSaisi(ligne.prix);
+        cible.textContent = total > 0 ? "= " + formaterNombre(total) + " k" : "";
+    });
+
+    const verdict = $("calcVerdict");
+    const detail = $("calcDetail");
+
+    if (!calcRenseigne(calcBrouillon)) {
+        verdict.className = "calc-verdict calc-verdict-vide";
+        verdict.textContent = "Renseigne au moins un prix pour voir le verdict.";
+        detail.innerHTML = "";
+        return;
+    }
+
+    const v = verdictDe(r);
+    verdict.className = "calc-verdict " + v.classe;
+    verdict.innerHTML = `
+        <div class="verdict-titre">${v.titre}</div>
+        <div class="verdict-chiffre">${r.profit >= 0 ? "+" : ""}${formaterNombre(r.profit)} k
+            par craft · ${r.margePct.toFixed(1)} % de marge</div>
+        <div class="verdict-texte">${v.texte}</div>`;
+
+    const lignes = [
+        ["Coût des ingrédients", "− " + formaterNombre(r.cout) + " k", ""],
+        ["Prix de vente affiché", formaterNombre(r.prixVente) + " k", ""],
+        ["Taxe HDV (" + nombreSaisi(calcBrouillon.taxePct) + " %)",
+            "− " + formaterNombre(r.taxe) + " k", ""],
+        ["Ce que je touche vraiment", formaterNombre(r.netVente) + " k", ""],
+        ["Bénéfice par craft",
+            (r.profit >= 0 ? "+" : "") + formaterNombre(r.profit) + " k",
+            r.profit >= 0 ? "profit-positif" : "profit-negatif",
+            "ligne-benefice"]
+    ];
+
+    // Les deux indicateurs du guide n'ont de sens qu'avec un volume de ventes.
+    if (r.ventesJour > 0) {
+        lignes.push(["Ventes par jour", r.ventesJour.toFixed(1), ""]);
+        lignes.push(["Marge journalière", formaterNombre(r.margeJour) + " k",
+            r.margeJour >= 0 ? "profit-positif" : "profit-negatif"]);
+        lignes.push(["Indice de profitabilité", formaterNombre(r.indice), ""]);
+    }
+
+    detail.innerHTML = lignes.map(([nom, valeur, classe, classeLigne]) => `
+        <div class="ligne-calcul ${classeLigne || ""}">
+            <span>${nom}</span>
+            <span class="valeur ${classe}">${valeur}</span>
+        </div>`).join("")
+        + (r.ventesJour > 0 ? "" : `
+        <p class="petite-note">
+            💡 Renseigne les ventes sur 30 jours en haut pour obtenir la marge
+            journalière et l'indice de profitabilité — les deux chiffres qui
+            départagent vraiment deux crafts.
+        </p>`);
+}
+
+
+/* ---------- Le tableau comparatif ---------- */
+
+function trierCraftsCompares(liste) {
+    const tri = $("calcTri").value;
+    const copie = liste.slice();
+    if (tri === "nom") {
+        copie.sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+        return copie;
+    }
+    const cle = { profit: "profit", marge: "margePct", margeJour: "margeJour", indice: "indice" }[tri];
+    copie.sort((a, b) => chiffrerCraft(craftAJour(b))[cle] - chiffrerCraft(craftAJour(a))[cle]);
+    return copie;
+}
+
+function afficherTableauCompare() {
+    const corps = $("calcCorps");
+    const rien = craftsCompares.length === 0;
+
+    $("calcVide").hidden = !rien;
+    document.querySelector(".tableau-scroll").hidden = rien;
+    if (rien) { corps.innerHTML = ""; return; }
+
+    corps.innerHTML = trierCraftsCompares(craftsCompares).map((range) => {
+        // Les prix du jeu sont relus dans le carnet : le tableau ne peut pas
+        // montrer un prix qu'on a corrigé ailleurs entre-temps.
+        const craft = craftAJour(range);
+        const r = chiffrerCraft(craft);
+        const classeProfit = r.profit >= 0 ? "profit-positif" : "profit-negatif";
+        // La ligne en cours de modification se repère d'un coup d'œil.
+        const enCours = craft.id === calcBrouillon.id ? "ligne-en-modification" : "";
+        return `
+        <tr class="${enCours}">
+            <td class="col-nom">
+                ${craft.img
+                    ? `<img src="${echapper(craft.img)}" alt="" class="craft-img" loading="lazy">`
+                    : `<span class="craft-img craft-img-vide" aria-hidden="true">🧩</span>`}
+                <span class="craft-nom">${echapper(craft.nom || "sans nom")}</span>
+            </td>
+            <td>${formaterNombre(r.cout)}</td>
+            <td>${formaterNombre(r.prixVente)}</td>
+            <td>${formaterNombre(r.netVente)}</td>
+            <td class="${classeProfit}">${r.profit >= 0 ? "+" : ""}${formaterNombre(r.profit)}</td>
+            <td class="${classeProfit}">${r.margePct.toFixed(1)} %</td>
+            <td>${r.ventesJour > 0 ? formaterNombre(r.margeJour) : "—"}</td>
+            <td>${r.ventesJour > 0 ? formaterNombre(r.indice) : "—"}</td>
+            <td class="col-actions">
+                <button type="button" class="lien-onglet"
+                        data-modifier="${echapper(craft.id)}">modifier</button>
+                <button type="button" class="lien-onglet lien-danger"
+                        data-supprimer="${echapper(craft.id)}">supprimer</button>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+
+/* ---------- Enregistrer, modifier, supprimer ---------- */
+
+function sauverCraftsCompares() {
+    sauverJSON("dofus_calculette", craftsCompares);
+    afficherTableauCompare();
+}
+
+function chargerBrouillonDansLaPage() {
+    $("calcNom").value = calcBrouillon.nom;
+    $("calcPrixVente").value = calcBrouillon.prixVente || "";
+    $("calcTaxe").value = calcBrouillon.taxePct;
+    $("calcVentes").value = calcBrouillon.ventes30 || "";
+    $("calcEnregistrer").textContent = calcBrouillon.id ? "Mettre à jour" : "Ajouter au tableau";
+    $("calcAnnuler").hidden = !calcBrouillon.id;
+    // « Où sert cet objet ? » n'a de sens que pour un objet connu du jeu.
+    $("calcOuSertResultat").hidden = calcBrouillon.resultId == null;
+    afficherLignesCalc();
+}
+
+function enregistrerCraftCompare() {
+    if (!calcRenseigne(calcBrouillon)) {
+        statut("Renseigne au moins un prix avant d'ajouter le craft au tableau.", "erreur");
+        return;
+    }
+    /* Copie profonde : le brouillon reste vivant après l'enregistrement et
+       va continuer d'être modifié — sans copie, on modifierait la ligne
+       déjà rangée dans le tableau. */
+    const aRanger = JSON.parse(JSON.stringify(calcBrouillon));
+    aRanger.nom = (aRanger.nom || "").trim() || "Craft sans nom";
+
+    if (aRanger.id) {
+        const i = craftsCompares.findIndex((c) => c.id === aRanger.id);
+        if (i >= 0) craftsCompares[i] = aRanger; else craftsCompares.push(aRanger);
+    } else {
+        aRanger.id = "c" + Date.now() + Math.random().toString(36).slice(2, 6);
+        craftsCompares.push(aRanger);
+    }
+
+    calcBrouillon = calcVierge();
+    chargerBrouillonDansLaPage();
+    sauverCraftsCompares();
+    statut("« " + aRanger.nom + " » est dans le tableau.", "ok");
+}
+
+function modifierCraftCompare(id) {
+    const craft = craftsCompares.find((c) => c.id === id);
+    if (!craft) return;
+    // On rouvre avec les prix à jour, pas avec ceux du jour de l'enregistrement.
+    calcBrouillon = JSON.parse(JSON.stringify(craftAJour(craft)));
+    if (!calcBrouillon.lignes.length) calcBrouillon.lignes = [{ nom: "", qte: 1, prix: 0 }];
+    chargerBrouillonDansLaPage();
+    afficherTableauCompare();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function supprimerCraftCompare(id) {
+    const craft = craftsCompares.find((c) => c.id === id);
+    if (!craft) return;
+    if (!confirm("Retirer « " + craft.nom + " » du tableau ?")) return;
+    craftsCompares = craftsCompares.filter((c) => c.id !== id);
+    // Le formulaire ne doit pas rester pointé sur une ligne qui n'existe plus.
+    if (calcBrouillon.id === id) {
+        calcBrouillon.id = null;
+        chargerBrouillonDansLaPage();
+    }
+    sauverCraftsCompares();
+}
+
+
+/* ---------- Branchement ---------- */
+
+function brancherCalculette() {
+    /* La recherche. On attend une pause dans la frappe : une requête par
+       touche saturerait l'API pour rien. */
+    let minuteurRecherche;
+    $("calcRecherche").addEventListener("input", (e) => {
+        clearTimeout(minuteurRecherche);
+        const saisie = e.target.value;
+        if (sansAccent(saisie).replace(/\s+/g, "").length < 2) {
+            calcNumeroRecherche++;   // annule une recherche encore en vol
+            viderResultatsRecherche();
+            return;
+        }
+        minuteurRecherche = setTimeout(async () => {
+            const numero = ++calcNumeroRecherche;
+            messageRecherche("Recherche…");
+            try {
+                const objets = await chercherCraftsDuJeu(saisie);
+                if (numero !== calcNumeroRecherche) return;  // une frappe plus récente a pris la main
+                afficherResultatsRecherche(objets);
+            } catch (err) {
+                if (numero !== calcNumeroRecherche) return;
+                console.error(err);
+                messageRecherche("❌ Recherche impossible. Vérifie ta connexion.");
+            }
+        }, 350);
+    });
+
+    $("calcResultats").addEventListener("click", (e) => {
+        const bouton = e.target.closest("[data-ouvrir]");
+        if (bouton) ouvrirCraftDuJeu(parseInt(bouton.dataset.ouvrir, 10));
+    });
+
+    // Le panneau « où ça sert » : ouvrir un craft de la liste, ou refermer.
+    $("calcOuSert").addEventListener("click", (e) => {
+        if (e.target.closest("#ouSertFermer")) { viderOuSert(); return; }
+        const craft = e.target.closest("[data-ouvrir]");
+        if (craft) ouvrirCraftDuJeu(parseInt(craft.dataset.ouvrir, 10));
+    });
+
+    // « Où sert l'objet fini ? » — il peut lui-même être l'ingrédient d'un autre.
+    $("calcOuSertResultat").addEventListener("click", () => {
+        if (calcBrouillon.resultId != null) {
+            afficherOuSert(calcBrouillon.resultId, calcBrouillon.nom);
+        }
+    });
+
+    // L'en-tête : chaque frappe met le brouillon à jour et recalcule.
+    const champs = {
+        calcNom: "nom",
+        calcPrixVente: "prixVente",
+        calcTaxe: "taxePct",
+        calcVentes: "ventes30"
+    };
+    Object.entries(champs).forEach(([idChamp, propriete]) => {
+        $(idChamp).addEventListener("input", (e) => {
+            calcBrouillon[propriete] =
+                propriete === "nom" ? e.target.value : nombreSaisi(e.target.value);
+            /* Quand le craft vient du jeu, il a un identifiant DofusDB : son prix
+               de vente et son volume rejoignent le carnet commun, celui que lit
+               l'onglet ⚒️ Recettes & rentabilité. Une fiche tapée à la main n'a
+               pas d'identifiant et ne peut donc rien y écraser. */
+            if (calcBrouillon.resultId != null) {
+                if (propriete === "prixVente") {
+                    prix[calcBrouillon.resultId] = calcBrouillon.prixVente;
+                    sauverJSON("dofus_prix", prix);
+                }
+                if (propriete === "ventes30") {
+                    ventes[calcBrouillon.resultId] = calcBrouillon.ventes30;
+                    sauverJSON("dofus_ventes", ventes);
+                }
+            }
+            rafraichirCalc();
+        });
+    });
+
+    /* Les lignes d'ingrédients sont recréées en permanence : on écoute la
+       ZONE qui les contient, pas chaque champ. Un écouteur posé sur un champ
+       disparaîtrait avec lui au premier ajout de ligne. */
+    $("calcLignes").addEventListener("input", (e) => {
+        const ligne = e.target.closest(".calc-ligne");
+        if (!ligne) return;
+        const i = Number(ligne.dataset.index);
+        const champ = e.target.dataset.champ;
+        if (!champ || !calcBrouillon.lignes[i]) return;
+        calcBrouillon.lignes[i][champ] =
+            champ === "nom" ? e.target.value : nombreSaisi(e.target.value);
+        // Même carnet partagé, pour les ingrédients cette fois.
+        if (champ === "prix" && calcBrouillon.lignes[i].id != null) {
+            prix[calcBrouillon.lignes[i].id] = calcBrouillon.lignes[i].prix;
+            sauverJSON("dofus_prix", prix);
+        }
+        rafraichirCalc();
+    });
+
+    $("calcLignes").addEventListener("click", (e) => {
+        // 🔗 « où sert cet ingrédient ? »
+        const ouSert = e.target.closest("[data-ou-sert]");
+        if (ouSert) {
+            const i = Number(ouSert.closest(".calc-ligne").dataset.index);
+            const ligne = calcBrouillon.lignes[i] || {};
+            afficherOuSert(parseInt(ouSert.dataset.ouSert, 10), ligne.nom);
+            return;
+        }
+
+        const bouton = e.target.closest("[data-retirer]");
+        if (!bouton) return;
+        calcBrouillon.lignes.splice(Number(bouton.dataset.retirer), 1);
+        // Jamais zéro ligne : sinon il n'y a plus nulle part où taper.
+        if (!calcBrouillon.lignes.length) calcBrouillon.lignes.push({ nom: "", qte: 1, prix: 0 });
+        afficherLignesCalc();
+    });
+
+    $("calcAjouterLigne").addEventListener("click", () => {
+        calcBrouillon.lignes.push({ nom: "", qte: 1, prix: 0 });
+        afficherLignesCalc();
+        // Le curseur va tout seul dans la ligne qui vient d'apparaître.
+        const derniere = $("calcLignes").lastElementChild;
+        if (derniere) derniere.querySelector(".calc-ing-nom").focus();
+    });
+
+    $("calcEnregistrer").addEventListener("click", enregistrerCraftCompare);
+
+    $("calcAnnuler").addEventListener("click", () => {
+        calcBrouillon = calcVierge();
+        chargerBrouillonDansLaPage();
+        afficherTableauCompare();
+    });
+
+    $("calcVider").addEventListener("click", () => {
+        const id = calcBrouillon.id;   // on reste sur la même ligne si on la modifiait
+        calcBrouillon = calcVierge();
+        calcBrouillon.id = id;
+        chargerBrouillonDansLaPage();
+    });
+
+    $("calcTri").addEventListener("change", (e) => {
+        localStorage.setItem("dofus_calc_tri", e.target.value);
+        afficherTableauCompare();
+    });
+
+    $("calcToutEffacer").addEventListener("click", () => {
+        if (!craftsCompares.length) return;
+        if (!confirm("Effacer les " + craftsCompares.length + " crafts du tableau ?")) return;
+        craftsCompares = [];
+        sauverCraftsCompares();
+    });
+
+    // Modifier / supprimer : même raison qu'au-dessus, on écoute le corps du tableau.
+    $("calcCorps").addEventListener("click", (e) => {
+        const modif = e.target.closest("[data-modifier]");
+        if (modif) { modifierCraftCompare(modif.dataset.modifier); return; }
+        const suppr = e.target.closest("[data-supprimer]");
+        if (suppr) supprimerCraftCompare(suppr.dataset.supprimer);
+    });
+
+    const triRetenu = localStorage.getItem("dofus_calc_tri");
+    if (triRetenu && $("calcTri").querySelector(`[value="${triRetenu}"]`)) {
+        $("calcTri").value = triRetenu;
+    }
+
+    chargerBrouillonDansLaPage();
+    afficherTableauCompare();
+}
+
+
+/* ============================================================
+   16) TREMPLIN — craft ou brisage ?
+   ------------------------------------------------------------
+   Part des niveaux saisis dans 🛠️ Mes métiers, liste ce que je peux
+   fabriquer, et met en regard trois chiffres : ce que le craft coûte
+   (carnet de prix), ce qu'il se vend (carnet), et ce qu'il vaut brisé
+   (runes × prix de mes runes).
+
+   Le brisage ne dépend d'AUCUN prix d'ingrédient : il ne tient qu'aux
+   statistiques de l'objet et au prix des runes. La colonne « brisage »
+   est donc utile dès le premier jour, quand le carnet est encore vide.
+
+   Les formules vivent dans `brisage.js`. Ici, on ne fait que collecter
+   les données et afficher.
+   ============================================================ */
+
+/* Le référentiel : poids de chaque caractéristique, et quelle rune
+   correspond à quel effet. Les deux viennent de l'API et ne changent
+   qu'aux mises à jour du jeu — on les garde en mémoire du navigateur
+   plutôt que de les retélécharger à chaque visite. */
+let refBrisage = chargerJSON("dofus_ref_brisage", null);
+
+// Prix des runes du serveur, saisis à la main : { effectId: prix }.
+const prixRunes = chargerJSON("dofus_prix_runes", {});
+
+// Statistiques des objets, par identifiant : { idObjet: [effets] }.
+const statsObjets = {};
+
+// Le dernier calcul, pour pouvoir retrier sans tout recommencer.
+let tremplinLignes = [];
+
+function coefficientBrisage() {
+    const v = nombreSaisi($("tremplinCoef").value);
+    return v > 0 ? v : 100;
+}
+
+function modeDeJet() {
+    return $("tremplinJet").value || "moy";
+}
+
+
+/* ---------- Le référentiel ---------- */
+
+/* À incrémenter dès que la FORME du référentiel change : un navigateur qui a
+   gardé l'ancienne version la retélécharge alors tout seul, sans que personne
+   ait à vider son cache. (Version 2 : poids arrondis à la réception.) */
+const VERSION_REF_BRISAGE = 2;
+
+async function chargerReferentielBrisage() {
+    if (refBrisage && refBrisage.poids && refBrisage.runes
+        && refBrisage.version === VERSION_REF_BRISAGE) return refBrisage;
+
+    statutTremplin("Chargement des poids de caractéristiques…");
+    /* `effectPowerRate` EST le poids de brisage : recoupé avec la table
+       connue de la communauté (Vitalité 0,2 · Pods 0,25 · Sagesse 3 ·
+       Portée 51 · PM 90 · PA 100). Attention, c'est un nombre décimal —
+       une lecture entière écraserait la Vitalité à 0. */
+    const poids = {};
+    for (let saut = 0; saut < 1200; saut += 50) {
+        const d = await appelAPI("/effects?$limit=50&$skip=" + saut + "&lang=fr"
+            + "&$select[]=id&$select[]=effectPowerRate");
+        const lot = d.data || [];
+        lot.forEach((e) => {
+            /* L'API stocke ces poids en flottant 32 bits : la Vitalité, qui
+               vaut exactement 0,2, revient en « 0.20000000298023224 ». On
+               arrondit à la réception — sinon ce bruit s'affiche tel quel
+               dans l'interface et traîne dans tous les calculs. */
+            if ((e.effectPowerRate || 0) > 0) {
+                poids[e.id] = Math.round(e.effectPowerRate * 10000) / 10000;
+            }
+        });
+        if (!lot.length || saut + 50 >= (d.total ?? 0)) break;
+    }
+
+    statutTremplin("Chargement des runes…");
+    /* Chaque rune est un objet du jeu qui PORTE l'effet qu'elle
+       représente : Rune Ga Pa → effet 111 (PA), Rune Ré Per Feu →
+       effet 213 (% Résistance Feu). La correspondance est donc lue
+       dans les données, jamais déduite des abréviations du nom. */
+    const runes = {};
+    const d = await appelAPI("/items?slug.fr[$search]=rune&$limit=300&lang=fr"
+        + "&$select[]=id&$select[]=name&$select[]=possibleEffects");
+    for (const o of d.data || []) {
+        const nom = loc(o.name);
+        // On ne garde que les runes de base : « Rune Pa X » et « Rune Ra X »
+        // sont des paliers supérieurs, qui s'obtiennent en fusionnant.
+        if (!/^Rune /.test(nom) || /^Rune (Pa|Ra) /.test(nom)) continue;
+        const effet = (o.possibleEffects || [])[0];
+        if (!effet || effet.effectId == null) continue;
+        // Sans poids connu, la rune ne peut pas entrer dans un calcul.
+        if (!poids[effet.effectId]) continue;
+        runes[effet.effectId] = { id: o.id, nom };
+    }
+
+    refBrisage = { version: VERSION_REF_BRISAGE,
+                   date: new Date().toISOString().slice(0, 10), poids, runes };
+    sauverJSON("dofus_ref_brisage", refBrisage);
+    return refBrisage;
+}
+
+
+/* ---------- Les statistiques des objets ---------- */
+
+/* Les effets alourdissent beaucoup la réponse (≈ 2,6 Ko par objet) :
+   on ne les demande que pour les objets qu'on va vraiment afficher, et
+   une seule fois grâce au cache. */
+async function chargerStatsObjets(ids) {
+    const manquants = ids.filter((id) => !(id in statsObjets));
+    for (let i = 0; i < manquants.length; i += 50) {
+        const lot = manquants.slice(i, i + 50);
+        const query = lot.map((id) => "id[$in][]=" + id).join("&");
+        const d = await appelAPI("/items?" + query + "&$limit=50&lang=fr"
+            + "&$select[]=id&$select[]=possibleEffects");
+        for (const o of d.data || []) statsObjets[o.id] = o.possibleEffects || [];
+        statutTremplin("Statistiques : " + Math.min(i + 50, manquants.length)
+            + " / " + manquants.length + " objets…");
+    }
+    // Ce qui n'est pas revenu ne doit pas être redemandé en boucle.
+    ids.forEach((id) => { if (!(id in statsObjets)) statsObjets[id] = []; });
+}
+
+/* Transforme les effets bruts d'un objet en lignes exploitables par
+   `brisage.js` : on ne garde que ce qui donne réellement une rune. */
+function lignesDeBrisage(idObjet, niveau) {
+    const mode = modeDeJet();
+    return (statsObjets[idObjet] || [])
+        .map((e) => ({
+            effectId: e.effectId,
+            valeur: jetRetenu(e, mode),
+            poidsRune: refBrisage.poids[e.effectId] || 0,
+            niveau
+        }))
+        // Une caractéristique sans rune correspondante (dommages d'arme,
+        // effets de sort…) ne produit rien au brisage.
+        .filter((l) => l.valeur > 0 && l.poidsRune > 0 && refBrisage.runes[l.effectId]);
+}
+
+
+/* ---------- Le calcul ---------- */
+
+function statutTremplin(texte) {
+    $("tremplinStatut").textContent = texte || "";
+}
+
+async function calculerTremplin() {
+    const bouton = $("tremplinCalculer");
+    bouton.disabled = true;
+    $("tremplinResultat").innerHTML = "";
+    try {
+        await chargerReferentielBrisage();
+
+        const metiers = mesMetiersCommences();
+        if (!metiers.length) {
+            statutTremplin("");
+            $("tremplinResultat").innerHTML = `<p class="message-vide">
+                Renseigne d'abord le niveau d'au moins un métier dans
+                <strong>🛠️ Mes métiers</strong>.</p>`;
+            return;
+        }
+
+        const lignes = [];
+        const idsAStatuer = [];
+        for (const m of metiers) {
+            const niveauMetier = niveauDuMetier(m.id);
+            statutTremplin("Recettes de " + nomDuMetier(m.id) + "…");
+            const recettes = await recupererRecettesDuMetier(m.id);
+            for (const r of recettes) {
+                const objet = cacheObjets[r.resultId] || {};
+                const niveauObjet = objet.niveau || r.resultLevel || 0;
+                // « Ce que je peux fabriquer » : la recette doit être à ma portée.
+                if (niveauObjet > niveauMetier) continue;
+                lignes.push({
+                    recette: r,
+                    idObjet: r.resultId,
+                    nom: objet.nom || ("Objet #" + r.resultId),
+                    niveau: niveauObjet,
+                    metier: nomDuMetier(m.id)
+                });
+                idsAStatuer.push(r.resultId);
+            }
+        }
+
+        if (!lignes.length) {
+            statutTremplin("");
+            $("tremplinResultat").innerHTML = `<p class="message-vide">
+                Aucune recette à ta portée pour l'instant. Monte un métier, ou
+                corrige tes niveaux dans 🛠️ Mes métiers.</p>`;
+            return;
+        }
+
+        await chargerStatsObjets(idsAStatuer);
+
+        const coef = coefficientBrisage();
+        tremplinLignes = lignes.map((l) => {
+            const brisage = meilleurBrisage(
+                lignesDeBrisage(l.idObjet, l.niveau), prixRunes, coef);
+            const cout = coutDeLaRecette(l.recette);
+            const prixVente = prix[l.idObjet] || 0;
+            return { ...l, brisage, ...cout, prixVente };
+        });
+
+        statutTremplin("");
+        afficherTremplin();
+    } catch (e) {
+        console.error(e);
+        statutTremplin("");
+        $("tremplinResultat").innerHTML = `<p class="message-vide">
+            ❌ Le calcul a échoué. Vérifie ta connexion et réessaie.</p>`;
+    } finally {
+        bouton.disabled = false;
+    }
+}
+
+/* Coût d'une recette d'après le carnet. Comme ailleurs dans l'outil, un
+   coût auquel il manque des prix est un MINIMUM, et on le dit. */
+function coutDeLaRecette(recette) {
+    const ids = recette.ingredientIds || [];
+    let cout = 0;
+    let manquants = 0;
+    ids.forEach((id, i) => {
+        const p = prix[id] || 0;
+        if (!p) manquants++;
+        cout += p * ((recette.quantities || [])[i] || 1);
+    });
+    return { cout, coutManquants: manquants, nbIngredients: ids.length };
+}
+
+
+/* ---------- L'affichage ---------- */
+
+function trierTremplin(lignes) {
+    const tri = $("tremplinTri").value;
+    const copie = lignes.slice();
+    const gain = (l) => Math.max(l.brisage.meilleur.total, l.prixVente) - l.cout;
+    const cles = {
+        brisage: (l) => l.brisage.meilleur.total,
+        vente: (l) => l.prixVente,
+        gain: gain,
+        niveau: (l) => l.niveau
+    };
+    if (tri === "nom") {
+        copie.sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+        return copie;
+    }
+    const cle = cles[tri] || cles.brisage;
+    copie.sort((a, b) => cle(b) - cle(a));
+    return copie;
+}
+
+function afficherTremplin() {
+    if (!tremplinLignes.length) return;
+
+    const sansPrix = Object.keys(refBrisage.runes)
+        .filter((e) => !prixRunes[e]).length;
+    const avertissement = sansPrix
+        ? `<p class="calc-cherche">⚠️ ${sansPrix} runes n'ont pas encore de prix :
+               les valeurs de brisage ci-dessous sont des <strong>minimums</strong>.
+               Renseigne-les dans le tableau des runes au-dessus.</p>`
+        : "";
+
+    const lignes = trierTremplin(tremplinLignes);
+    $("tremplinResultat").innerHTML = avertissement + `
+        <div class="tableau-scroll">
+            <table class="tableau-compare tableau-tremplin">
+                <thead><tr>
+                    <th>Objet</th><th>Niv.</th><th>Métier</th>
+                    <th>Craft</th><th>Vente</th><th>Brisage</th>
+                    <th>Focus</th><th>Que faire ?</th>
+                </tr></thead>
+                <tbody>${lignes.map(ligneTremplin).join("")}</tbody>
+            </table>
+        </div>
+        <p class="petite-note">
+            ${lignes.length} crafts à ta portée · coefficient ${coefficientBrisage()} %
+            · jet ${{ min: "minimum", moy: "moyen", max: "maximum" }[modeDeJet()]}.
+            Le brisage est une <strong>estimation</strong> (voir l'encart plus bas).
+        </p>`;
+}
+
+function ligneTremplin(l) {
+    const b = l.brisage;
+    const brisage = b.meilleur.total;
+    const coutSur = l.coutManquants === 0 && l.cout > 0;
+
+    // Que faire de cet objet ? On ne tranche que si on a de quoi comparer.
+    let verdict;
+    if (!brisage && !l.prixVente) {
+        verdict = `<span class="ou-sert-inconnu">à renseigner</span>`;
+    } else if (brisage > l.prixVente) {
+        verdict = `<span class="profit-positif">✨ briser</span>`;
+    } else {
+        verdict = `<span class="tremplin-vendre">vendre</span>`;
+    }
+
+    /* Avec ou sans focus ? C'est la question pratique du brisage. On ne
+       conseille le focus que s'il rapporte VRAIMENT plus, et on dit sur
+       quelle caractéristique. */
+    let focus;
+    if (!b.focus) {
+        focus = `<span class="ou-sert-inconnu">—</span>`;
+    } else if (b.gainDuFocus > 0) {
+        const rune = refBrisage.runes[b.focus.effectId];
+        focus = `<span class="profit-positif">${echapper(rune ? rune.nom : "?")}</span>
+                 <span class="tremplin-ecart">+${formaterNombre(b.gainDuFocus)} k</span>`;
+    } else {
+        focus = `<span class="tremplin-vendre">sans focus</span>`;
+    }
+
+    return `
+    <tr>
+        <td class="col-nom">${echapper(l.nom)}</td>
+        <td>${l.niveau}</td>
+        <td class="tremplin-metier">${echapper(l.metier)}</td>
+        <td>${l.cout > 0
+            ? (coutSur ? formaterNombre(l.cout)
+                       : `<span class="cout-partiel" title="${l.coutManquants} prix manquant(s)">≥ ${formaterNombre(l.cout)}</span>`)
+            : "—"}</td>
+        <td>${l.prixVente > 0 ? formaterNombre(l.prixVente) : "—"}</td>
+        <td>${brisage > 0 ? formaterNombre(brisage) : "—"}</td>
+        <td>${focus}</td>
+        <td>${verdict}</td>
+    </tr>`;
+}
+
+
+/* ---------- Le prix de mes runes ---------- */
+
+function afficherPrixRunes() {
+    const zone = $("tremplinRunes");
+    if (!refBrisage || !refBrisage.runes) {
+        zone.innerHTML = `<p class="calc-cherche">
+            La liste des runes se charge au premier calcul.</p>`;
+        return;
+    }
+    const entrees = Object.entries(refBrisage.runes)
+        .map(([effectId, r]) => ({ effectId, ...r, poids: refBrisage.poids[effectId] }))
+        .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+
+    const remplies = entrees.filter((e) => prixRunes[e.effectId] > 0).length;
+    zone.innerHTML = `
+        <p class="petite-note">
+            ${remplies} / ${entrees.length} runes renseignées.
+            Relève-les dans l'HDV de ton serveur — une rune sans prix est
+            <strong>ignorée</strong> dans les calculs, jamais devinée.
+        </p>
+        <div class="grille-runes">
+            ${entrees.map((e) => `
+                <label class="rune-ligne${prixRunes[e.effectId] > 0 ? " rune-remplie" : ""}">
+                    <span class="rune-nom">${echapper(e.nom)}</span>
+                    <span class="rune-poids" title="poids de brisage">${e.poids}</span>
+                    <input type="number" min="0" step="1" class="prix-input"
+                           data-prix-rune="${e.effectId}"
+                           value="${prixRunes[e.effectId] || ""}" placeholder="0">
+                </label>`).join("")}
+        </div>`;
+}
+
+
+/* ---------- Branchement ---------- */
+
+function brancherTremplin() {
+    $("tremplinCalculer").addEventListener("click", calculerTremplin);
+    $("tremplinTri").addEventListener("change", afficherTremplin);
+
+    // Coefficient et mode de jet : on retient le réglage, et on refait le
+    // calcul du brisage sans redemander les recettes à l'API.
+    ["tremplinCoef", "tremplinJet"].forEach((id) => {
+        $(id).addEventListener("input", () => {
+            localStorage.setItem("dofus_" + id, $(id).value);
+            recalculerBrisageTremplin();
+        });
+        const retenu = localStorage.getItem("dofus_" + id);
+        if (retenu) $(id).value = retenu;
+    });
+
+    // Les prix de runes : un seul écouteur pour toute la grille.
+    $("tremplinRunes").addEventListener("input", (e) => {
+        const champ = e.target.closest("[data-prix-rune]");
+        if (!champ) return;
+        const effectId = champ.dataset.prixRune;
+        const valeur = nombreSaisi(champ.value);
+        if (valeur > 0) prixRunes[effectId] = valeur; else delete prixRunes[effectId];
+        sauverJSON("dofus_prix_runes", prixRunes);
+        champ.closest(".rune-ligne").classList.toggle("rune-remplie", valeur > 0);
+        recalculerBrisageTremplin();
+    });
+
+    $("tremplinRecharger").addEventListener("click", async () => {
+        if (!confirm("Retélécharger les poids et la liste des runes depuis DofusDB ?")) return;
+        refBrisage = null;
+        localStorage.removeItem("dofus_ref_brisage");
+        await chargerReferentielBrisage();
+        afficherPrixRunes();
+        statutTremplin("Référentiel rechargé.");
+    });
+
+    afficherPrixRunes();
+}
+
+/* Un prix de rune ou un coefficient qui change ne demande AUCUN appel
+   réseau : les statistiques des objets sont déjà en mémoire. On refait
+   juste les calculs. */
+function recalculerBrisageTremplin() {
+    if (!tremplinLignes.length || !refBrisage) return;
+    const coef = coefficientBrisage();
+    tremplinLignes = tremplinLignes.map((l) => ({
+        ...l,
+        brisage: meilleurBrisage(lignesDeBrisage(l.idObjet, l.niveau), prixRunes, coef)
+    }));
+    afficherTremplin();
+}
 
 /* ============================================================
    8) DÉMARRAGE
@@ -1766,6 +3052,8 @@ brancherMesMetiers();
 brancherOptimisation();
 brancherPlan();
 brancherRecolte();
+brancherCalculette();
+brancherTremplin();
 afficherMethode();
 rafraichirTableauBord();
 chargerMetiers();

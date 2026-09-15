@@ -7,7 +7,7 @@
     <!-- Le « ?v=… » force les navigateurs à retélécharger les fichiers après
          une mise à jour : sans lui, un iPhone peut garder l'ancien app.js en
          cache et afficher une page cassée. À CHANGER À CHAQUE PUBLICATION. -->
-    <link rel="stylesheet" href="style.css?v=2026-08-30f">
+    <link rel="stylesheet" href="style.css?v=2026-09-15e">
 </head>
 <body>
 
@@ -24,6 +24,8 @@
     <!-- ===================== ONGLETS ===================== -->
     <nav class="onglets">
         <button class="onglet actif" data-onglet="recettes">⚒️ Recettes &amp; rentabilité</button>
+        <button class="onglet" data-onglet="calculette">🧮 Ma calculette</button>
+        <button class="onglet" data-onglet="tremplin">🚀 Craft ou brisage</button>
         <button class="onglet" data-onglet="optim">📈 Optimiser ma montée</button>
         <button class="onglet" data-onglet="metiers">🛠️ Mes métiers</button>
         <button class="onglet" data-onglet="plan">📋 Feuille de route</button>
@@ -385,6 +387,248 @@
     <!-- ============================================================
          VUE : LA MÉTHODE
          ============================================================ -->
+
+    <!-- ============================================================
+         VUE : CALCULETTE LIBRE
+         Rien ici ne vient de DofusDB : tous les chiffres sont saisis
+         à la main. C'est le pendant de l'onglet Rentabilité pour tout
+         ce que l'API ne connaît pas.
+         ============================================================ -->
+    <section id="vue-calculette" class="vue" data-vue="calculette" hidden>
+
+        <div class="bloc">
+            <h2>🧮 Est-ce que ce craft est rentable ?</h2>
+            <p class="explication">
+                Cherche un objet du jeu : <strong>sa recette se remplit toute seule</strong>,
+                tu n'as plus qu'à saisir le prix de chaque ressource. Ou pars d'une fiche vide
+                et tape tout à la main — pratique pour un achat-revente ou un prix relevé en
+                jeu. Dans les deux cas, le calcul se refait pendant que tu tapes.
+            </p>
+
+            <div class="champ champ-large calc-recherche">
+                <label for="calcRecherche">🔎 Chercher un craft du jeu</label>
+                <input type="text" id="calcRecherche" autocomplete="off"
+                       placeholder="ex : boisaille, gelano, amulette bouftou…">
+                <small>
+                    Deux lettres suffisent. Les accents et les majuscules ne comptent pas :
+                    « epee » trouve « Épée ».
+                </small>
+            </div>
+            <div id="calcResultats" class="calc-resultats"></div>
+
+            <div class="calc-entete">
+                <div class="champ champ-large">
+                    <label for="calcNom">Nom de l'objet</label>
+                    <input type="text" id="calcNom" placeholder="ex : Épée de boisaille">
+                    <button type="button" id="calcOuSertResultat" class="lien-onglet" hidden>
+                        🔗 Où sert cet objet ?
+                    </button>
+                </div>
+                <div class="champ">
+                    <label for="calcPrixVente">Prix de vente (kamas)</label>
+                    <input type="number" id="calcPrixVente" min="0" step="1" placeholder="0">
+                </div>
+                <div class="champ">
+                    <label for="calcTaxe">Taxe HDV (%)</label>
+                    <input type="number" id="calcTaxe" min="0" max="100" step="0.5" value="2">
+                    <small>Prélevée sur le prix affiché. Ajuste-la si ton mode de vente diffère.</small>
+                </div>
+                <div class="champ">
+                    <label for="calcVentes">Ventes sur 30 jours</label>
+                    <input type="number" id="calcVentes" min="0" step="1" placeholder="facultatif">
+                    <small>Relevé dans l'HDV. Débloque la marge journalière et l'indice.</small>
+                </div>
+            </div>
+
+            <h3 class="calc-titre">Ce que ça me coûte</h3>
+            <p class="petite-note">
+                Une ligne par ingrédient. Une ligne vide est simplement ignorée.
+            </p>
+            <div id="calcLignes" class="calc-lignes"></div>
+            <button type="button" id="calcAjouterLigne" class="bouton-secondaire">
+                + Ajouter un ingrédient
+            </button>
+
+            <!-- Le 🔗 d'une ligne remplit ce panneau : les autres crafts qui
+                 consomment cet ingrédient, avec leur coût et leur prix de vente. -->
+            <div id="calcOuSert" class="calc-ou-sert"></div>
+
+            <h3 class="calc-titre">Le verdict</h3>
+            <div id="calcVerdict" class="calc-verdict"></div>
+            <div id="calcDetail" class="calc-detail"></div>
+
+            <div class="calc-actions">
+                <button type="button" id="calcEnregistrer" class="bouton-craft">
+                    Ajouter au tableau
+                </button>
+                <button type="button" id="calcAnnuler" class="bouton-secondaire" hidden>
+                    Annuler la modification
+                </button>
+                <button type="button" id="calcVider" class="bouton-secondaire">
+                    Vider la calculette
+                </button>
+            </div>
+        </div>
+
+        <div class="bloc">
+            <h2>📊 Mes crafts comparés</h2>
+            <p class="explication">
+                Tous les crafts que tu as chiffrés, côte à côte. Le tri par défaut met en
+                haut celui qui rapporte le plus par craft — mais relis l'encart de l'onglet
+                Rentabilité : <strong>un gros bénéfice qui ne part jamais vaut moins qu'un
+                petit qui part cent fois par jour</strong>. Les deux derniers tris sont là
+                pour ça.
+            </p>
+
+            <div class="barre-outils">
+                <div class="champ">
+                    <label for="calcTri">Trier par</label>
+                    <select id="calcTri">
+                        <option value="profit">Bénéfice par craft</option>
+                        <option value="marge">Marge en %</option>
+                        <option value="margeJour">Marge journalière</option>
+                        <option value="indice">Indice de profitabilité</option>
+                        <option value="nom">Nom de l'objet</option>
+                    </select>
+                </div>
+                <div class="champ champ-case">
+                    <button type="button" id="calcToutEffacer" class="bouton-secondaire">
+                        Effacer tout le tableau
+                    </button>
+                </div>
+            </div>
+
+            <div class="tableau-scroll">
+                <table id="calcTableau" class="tableau-compare">
+                    <thead>
+                        <tr>
+                            <th>Objet</th>
+                            <th>Coût</th>
+                            <th>Vente</th>
+                            <th>Je touche</th>
+                            <th>Bénéfice</th>
+                            <th>Marge</th>
+                            <th>Marge / jour</th>
+                            <th>Indice</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="calcCorps"></tbody>
+                </table>
+            </div>
+            <p id="calcVide" class="message-vide">
+                Aucun craft enregistré. Chiffre-en un au-dessus, puis clique sur
+                « Ajouter au tableau ».
+            </p>
+            <p class="petite-note">💾 Enregistré automatiquement dans ce navigateur.</p>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         VUE : TREMPLIN — craft ou brisage ?
+         ============================================================ -->
+    <section id="vue-tremplin" class="vue" data-vue="tremplin" hidden>
+
+        <div class="bloc">
+            <h2>🚀 Craft ou brisage ?</h2>
+            <p class="explication">
+                Cet onglet part de tes niveaux saisis dans <strong>🛠️ Mes métiers</strong>,
+                liste tout ce que tu peux fabriquer, et met trois chiffres côte à côte :
+                ce que le craft <strong>coûte</strong>, ce qu'il se <strong>vend</strong>,
+                et ce qu'il vaut <strong>brisé</strong>. Le brisage ne dépend d'aucun prix
+                d'ingrédient — seulement des statistiques de l'objet et du prix de tes
+                runes : cette colonne est donc utile même avec un carnet vide.
+            </p>
+
+            <div class="barre-outils">
+                <div class="champ">
+                    <label for="tremplinCoef">Coefficient de brisage (%)</label>
+                    <input type="number" id="tremplinCoef" min="1" max="4000" step="1" value="100">
+                    <small>
+                        Propre à ton serveur et variable dans le temps (1 à 4000 %).
+                        Relève-le en jeu ou sur DoFocus.
+                    </small>
+                </div>
+                <div class="champ">
+                    <label for="tremplinJet">Jet des statistiques</label>
+                    <select id="tremplinJet">
+                        <option value="moy">Moyen</option>
+                        <option value="min">Minimum</option>
+                        <option value="max">Maximum</option>
+                    </select>
+                    <small>Le minimum sous-estime tout, le maximum ne sort presque jamais.</small>
+                </div>
+                <div class="champ">
+                    <label for="tremplinTri">Trier par</label>
+                    <select id="tremplinTri">
+                        <option value="brisage">Valeur de brisage</option>
+                        <option value="gain">Meilleur gain net</option>
+                        <option value="vente">Prix de vente</option>
+                        <option value="niveau">Niveau</option>
+                        <option value="nom">Nom</option>
+                    </select>
+                </div>
+                <div class="champ champ-case">
+                    <label>&nbsp;</label>
+                    <button type="button" id="tremplinCalculer" class="bouton-principal">
+                        Calculer
+                    </button>
+                </div>
+            </div>
+            <p id="tremplinStatut" class="calc-cherche"></p>
+        </div>
+
+        <div class="bloc">
+            <h2>💠 Le prix de mes runes</h2>
+            <p class="explication">
+                Ces prix sont ceux de <strong>ton serveur</strong> : relève-les dans l'HDV
+                ou sur <a href="https://dofocus.fr/runes" target="_blank" rel="noopener">DoFocus</a>,
+                puis saisis-les ici une fois pour toutes. Ils sont enregistrés dans ton
+                navigateur. <strong>Aucun prix n'est pré-rempli</strong> : DoFocus ne
+                laisse pas d'autre outil lire ses prix, et un chiffre inventé serait pire
+                que pas de chiffre.
+            </p>
+            <div id="tremplinRunes"></div>
+            <button type="button" id="tremplinRecharger" class="bouton-secondaire">
+                Retélécharger la liste des runes
+            </button>
+        </div>
+
+        <div id="tremplinResultat"></div>
+
+        <div class="bloc encart-attention">
+            <h2>⚠️ Ce que vaut ce calcul</h2>
+            <p class="explication">
+                Trois choses sont <strong>sûres</strong>, une ne l'est pas. Autant le dire.
+            </p>
+            <ul class="liste-regles">
+                <li><strong>Les poids sont exacts.</strong> Ils viennent de l'API DofusDB
+                    et recoupent la table connue de la communauté : Vitalité 0,2 ·
+                    Pods 0,25 · Force 1 · Sagesse 3 · Portée 51 · PM 90 · PA 100.</li>
+                <li><strong>La correspondance rune ↔ caractéristique est exacte.</strong>
+                    Chaque rune est un objet du jeu qui porte l'effet qu'elle représente.
+                    Rien n'est déduit des abréviations de son nom.</li>
+                <li><strong>La règle du focus est celle de DoFocus :</strong> la
+                    caractéristique ciblée rend 100 %, les autres 50 %, et tout devient de
+                    la rune ciblée. L'outil compare les deux et te dit laquelle gagne.</li>
+                <li><strong>La formule, elle, est une estimation.</strong> Ankama ne la
+                    publie pas. Celle utilisée est celle des calculateurs de la communauté
+                    — <code>(valeur × poids × niveau × 0,015) + 1</code>, puis conversion
+                    en runes. L'un d'eux mesure lui-même « un résultat faux 34 fois sur
+                    200, erreur max 7 % ». Prends les montants comme un ordre de grandeur
+                    pour <em>comparer</em> des objets entre eux, pas comme une promesse.</li>
+                <li><strong>Il n'existe pas de « taux de brisage par objet ».</strong> Le
+                    coefficient est propre au serveur et bouge en permanence selon le
+                    volume brisé. C'est un réglage, pas une donnée à récupérer.</li>
+            </ul>
+            <p class="petite-note">
+                Les formules sont regroupées dans <code>brisage.js</code> pour rester
+                faciles à corriger, et vérifiées par des tests. Si un brisage réel te
+                donne un résultat très différent, dis-le moi : on recalibrera, comme on
+                l'a fait pour le moteur d'XP.
+            </p>
+        </div>
+    </section>
     <section id="vue-methode" class="vue" data-vue="methode" hidden>
 
         <div class="bloc">
@@ -510,13 +754,14 @@
         </p>
     </footer>
 
-    <script src="xp.js?v=2026-08-30f"></script>
-    <script src="feuille-route.js?v=2026-08-30f"></script>
-    <script src="methode.js?v=2026-08-30f"></script>
-    <script src="recolte.js?v=2026-08-30f"></script>
-    <script src="app.js?v=2026-08-30f"></script>
+    <script src="xp.js?v=2026-09-15e"></script>
+    <script src="brisage.js?v=2026-09-15e"></script>
+    <script src="feuille-route.js?v=2026-09-15e"></script>
+    <script src="methode.js?v=2026-09-15e"></script>
+    <script src="recolte.js?v=2026-09-15e"></script>
+    <script src="app.js?v=2026-09-15e"></script>
     <!-- Contrôles du moteur d'XP : ne s'exécutent pas tout seuls.
          Tape lancerTestsXp() dans la console du navigateur (F12). -->
-    <script src="test-xp.js?v=2026-08-30f"></script>
+    <script src="test-xp.js?v=2026-09-15e"></script>
 </body>
 </html>

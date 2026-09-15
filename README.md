@@ -8,9 +8,17 @@ crafter** à chaque instant.
 Les recettes sont récupérées **en direct** depuis l'API publique de
 [DofusDB](https://dofusdb.fr/) (`api.dofusdb.fr`) : rien n'est stocké en dur, tout est à jour.
 
-## Les six onglets
+## Les huit onglets
 
 L'onglet ouvert est mémorisé d'une visite à l'autre.
+
+> ⚠️ **En ce moment, seuls trois onglets sont affichés** : 🧮 Ma calculette,
+> 🚀 Craft ou brisage et 🛠️ Mes métiers.
+> Les cinq autres ne sont pas supprimés — leurs sections et leur code sont intacts, seul
+> leur bouton est masqué. Pour en remettre un en service, ajoute son nom dans
+> `ONGLETS_VISIBLES`, en haut de la section « LES ONGLETS » d'`app.js`. C'est la seule
+> ligne à changer.
+
 
 ### 🛠️ Mes métiers
 Le niveau de chacun de tes métiers, saisi **une seule fois**. C'est la source de vérité de
@@ -87,6 +95,79 @@ est-il lui-même craftable, et par quel métier), **suivi des bénéfices** (« 
 une section **[Huzounet](https://huzounet.fr/)** pour repérer les équipements populaires par
 tranche de niveau — utile pour choisir sa cible de forgemagie.
 
+### 🧮 Ma calculette
+**Cherche un objet du jeu : sa recette se remplit toute seule.** Les ingrédients et leurs
+quantités viennent de DofusDB et ne sont pas modifiables — il ne te reste que le **prix de
+chaque ressource** à saisir. La recherche ignore accents et majuscules (« epee » trouve
+« Épée ») et accepte plusieurs mots (« amulette bouftou »).
+
+Un mot trop large ramène parfois des centaines de crafts : la liste affiche alors les
+**25 plus proches de ce que tu as tapé** et **te dit combien il y en a en tout**, pour que
+tu saches qu'il faut préciser. « potion » → 114 crafts ; « potion vieillesse » → celui que
+tu cherches, en tête.
+
+Tu peux aussi partir d'une fiche vide et tout taper à la main : un craft absent de l'API,
+un achat-revente, ou simplement un prix relevé en jeu.
+
+Le calcul se refait pendant que tu tapes et rend un verdict en clair : **rentable**,
+**rentable de justesse** (moins de 15 % de marge — un ingrédient qui monte suffit à effacer
+le bénéfice) ou **tu perds des kamas**. Le détail montre la chaîne complète :
+coût → prix de vente → **taxe HDV** → ce que tu touches vraiment → bénéfice.
+
+La taxe est réglable (2 % par défaut) : c'est une donnée de serveur et de mode de vente,
+pas une constante du jeu. À 0 %, tu retrouves exactement le calcul de l'onglet Rentabilité.
+
+Les prix saisis sur un craft venu du jeu rejoignent le **carnet commun** : ils s'affichent
+aussi dans l'onglet Rentabilité, et reviennent tout seuls la prochaine fois. Une fiche tapée
+à la main n'a pas d'identifiant et ne peut donc rien y écraser.
+
+**Tout ce que tu tapes est enregistré au fil de la frappe** : la fiche en cours survit à
+un rechargement de page, à un navigateur fermé, à un téléphone mis en veille. Rien à
+sauvegarder à la main.
+
+**🔗 Où sert cet objet ?** — le petit 🔗 au bout d'une ligne d'ingrédient (et le lien sous
+le nom de l'objet) liste **tous les crafts qui consomment cette ressource**, avec pour
+chacun son coût de craft et son prix de vente d'après ton carnet, et le bénéfice qui en
+découle. Tu notes le prix d'une Potion de Souvenir, tu cliques, et tu vois d'un coup les
+8 crafts où elle entre et lequel vaut le coup. Un coût calculé sur des prix encore
+inconnus s'affiche en orange avec un « ≥ » : c'est un minimum, pas un coût. Clique sur un
+craft pour l'ouvrir dans la calculette et compléter ce qui manque.
+
+Chaque craft chiffré peut rejoindre le **tableau comparatif** du bas, qui les affiche côte à
+côte et se trie par bénéfice, marge, marge journalière ou indice de profitabilité — les mêmes
+formules que l'onglet Rentabilité, pour que les chiffres des deux onglets restent comparables.
+
+### 🚀 Craft ou brisage
+Part de tes niveaux saisis dans 🛠️ Mes métiers, liste **tout ce que tu peux fabriquer**,
+et met trois chiffres côte à côte : ce que le craft **coûte**, ce qu'il se **vend**, et ce
+qu'il vaut **brisé**. Plus un verdict : vendre, ou briser.
+
+Le brisage ne dépend d'**aucun prix d'ingrédient** — seulement des statistiques de l'objet
+et du prix de tes runes. Cette colonne est donc utile dès le premier jour, quand le carnet
+de prix est encore vide.
+
+**Avec ou sans focus ?** L'outil compare les deux et te dit laquelle gagne, et de combien.
+Le focus concentre la production sur une caractéristique : celle-ci rend 100 %, les autres
+50 %, et tout devient de la rune ciblée. Il gagne quand une rune vaut nettement plus cher
+que les autres.
+
+**Le prix de tes runes** se saisit une fois, dans le tableau de l'onglet, et reste dans ton
+navigateur. Rien n'est pré-rempli : DoFocus ne laisse aucun autre outil lire ses prix, et un
+chiffre inventé serait pire que pas de chiffre. Une rune sans prix est **ignorée** dans les
+calculs, et l'outil annonce alors ses montants comme des minimums.
+
+**Ce qui est sûr, ce qui ne l'est pas.** Les poids des caractéristiques viennent de l'API
+DofusDB et recoupent la table connue de la communauté (Vitalité 0,2 · Pods 0,25 · Force 1 ·
+Sagesse 3 · Portée 51 · PM 90 · PA 100). La correspondance rune ↔ caractéristique est lue
+dans les données, jamais déduite des abréviations. **La formule, elle, est une estimation** :
+Ankama ne la publie pas, et les calculateurs de la communauté annoncent eux-mêmes plusieurs
+pour cent d'erreur. Utilise les montants pour *comparer* des objets entre eux, pas comme une
+promesse.
+
+Enfin, il n'existe pas de « taux de brisage par objet » : le **coefficient** est propre à ton
+serveur et bouge en permanence selon le volume brisé (1 % à 4000 %). C'est un réglage en haut
+de l'onglet, pas une donnée à récupérer.
+
 ### 🧭 La méthode
 Le « pourquoi » derrière tout le reste :
 
@@ -121,12 +202,13 @@ dehors des appels de lecture à l'API DofusDB.
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | la structure des quatre onglets |
+| `index.html` | la structure des huit onglets |
 | `style.css` | l'apparence |
 | `app.js` | toute la logique : appels API, calculs, affichage, sauvegardes |
 | `feuille-route.js` | **données** : principes, phases, investissements passifs, synergies |
 | `methode.js` | **données** : ratios, paliers par métier, tier list, socles du profit, événements |
 | `recolte.js` | **données** : métiers de récolte, tranches de niveau |
+| `brisage.js` | **règles de calcul** du brisage — fonctions pures, aucune dépendance |
 
 `app.js` ne contient aucune donnée de jeu ; les trois autres `.js` ne contiennent aucune logique.
 

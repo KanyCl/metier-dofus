@@ -17,11 +17,13 @@ compiler, tout doit tourner dans un navigateur. Les données de jeu viennent en
 direct de l'API publique **DofusDB** (`api.dofusdb.fr`), les données personnelles
 (prix, ventes, progression, notes) restent dans le `localStorage` du navigateur.
 
-## Les six onglets
+## Les huit onglets
 
 | Onglet | Ce qu'il répond |
 |---|---|
 | ⚒️ Recettes & rentabilité | Ce craft mérite-t-il mes kamas ? *(onglet d'accueil)* |
+| 🧮 Ma calculette | Ce craft précis est-il rentable ? Recette auto, prix à saisir |
+| 🚀 Craft ou brisage | Je le vends ou je le brise ? Avec ou sans focus ? |
 | 📈 Optimiser ma montée | Combien de crafts pour monter, avec quoi, pour combien ? |
 | 🛠️ Mes métiers | Où j'en suis — **la source de vérité de tout l'outil** |
 | 📋 Feuille de route | Dans quel ordre monter quoi, et avec quel capital |
@@ -30,17 +32,22 @@ direct de l'API publique **DofusDB** (`api.dofusdb.fr`), les données personnell
 
 L'onglet ouvert est mémorisé d'une visite à l'autre.
 
+⚠️ **Trois onglets seulement sont affichés aujourd'hui** (🧮, 🚀 et 🛠️). Les cinq autres
+sont intacts, juste masqués — voir `ONGLETS_VISIBLES` dans `app.js` et l'entrée du
+15 septembre (3) plus bas.
+
 ## Les fichiers
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | la structure des quatre onglets |
+| `index.html` | la structure des huit onglets |
 | `style.css` | l'apparence (palette Catppuccin Mocha) |
 | `app.js` | toute la logique : API, calculs, affichage, sauvegardes |
 | `feuille-route.js` | **données** : principes, phases, investissements passifs, synergies |
 | `methode.js` | **données** : ratios, paliers par métier, tier list, socles du profit, événements |
 | `recolte.js` | **données** : métiers de récolte, entrées à ignorer, tranches, pistes d'API |
 | `xp.js` | **règles de calcul** de l'XP métier — fonctions pures, aucune dépendance |
+| `brisage.js` | **règles de calcul** du brisage — fonctions pures, aucune dépendance |
 | `test-xp.js` | contrôle de `xp.js` — `node test-xp.js`, ou `lancerTestsXp()` en console |
 
 Règle de rangement : `app.js` ne contient aucune donnée de jeu, les fichiers de
@@ -329,3 +336,374 @@ Trois cas qui demandaient de l'attention :
 12 contrôles sur les six cas ci-dessus, joués sur les vraies données de
 `methode.js` dans Chrome headless (`--dump-dom`) : 12/12. La page complète se
 charge ensuite sans erreur, les 8 blocs de métiers sont rendus.
+
+## 15 septembre 2026 — l'onglet 🧮 Ma calculette
+
+L'onglet Rentabilité ne sait chiffrer que ce que DofusDB lui donne. Il ne répond
+donc pas à « j'ai ces prix sous les yeux, est-ce que ça vaut le coup ? » quand
+l'objet n'est pas dans l'API, quand c'est un achat-revente, ou quand on veut
+simplement vérifier un relevé fait en jeu. C'est l'objet du nouvel onglet :
+**tout est saisi à la main, rien n'est déduit**.
+
+### Deux blocs
+1. **La calculette** — nom de l'objet, une ligne par ingrédient (quantité × prix
+   unitaire, sous-total à droite), prix de vente, taxe HDV, et facultativement le
+   volume vendu sur 30 jours. Le calcul se refait à chaque frappe ; aucun bouton
+   à presser pour voir le résultat.
+2. **Le tableau comparatif** — les crafts chiffrés, côte à côte, triables par
+   bénéfice, marge, marge journalière ou indice. Modifiables et supprimables.
+
+### La taxe HDV
+Le calcul ne s'arrête plus à `vente − coût` : il passe par
+`vente → taxe → ce que je touche vraiment → bénéfice`. Le taux est un **champ**
+(2 % au départ), pas une constante : il dépend du mode de vente, et rien dans le
+projet ne permet de l'affirmer pour tous les cas. Le mettre à 0 redonne
+exactement le calcul de l'onglet Rentabilité — c'est d'ailleurs comme ça que les
+tests rejouent l'exemple chiffré du guide.
+
+### Le verdict
+Trois états, avec un seuil assumé (`MARGE_CONFORTABLE = 15 %`) :
+- bénéfice positif et marge ≥ 15 % → **✅ Rentable** ;
+- bénéfice positif mais marge maigre → **⚠️ Rentable, mais de justesse** : un
+  ingrédient qui monte ou un concurrent qui casse le prix efface le gain ;
+- bénéfice nul ou négatif → **➖ tu rentres dans tes frais** / **❌ tu perds des kamas**.
+
+Ce seuil est un repère de prudence, pas une règle du jeu. Il est nommé en haut du
+bloc pour rester ajustable.
+
+### Trois décisions de conception
+1. **Carnet séparé** (`dofus_calculette`). Les crafts saisis ici n'ont aucun
+   identifiant DofusDB : les ranger dans `dofus_prix` reviendrait à risquer
+   d'écraser le prix d'un vrai objet.
+2. **Mêmes formules que l'onglet Rentabilité** — marge % = bénéfice ÷ prix
+   affiché, ventes/jour = ventes sur 30 j ÷ 30, marge journalière et indice
+   identiques. Sans quoi deux crafts venus des deux onglets ne seraient pas
+   comparables.
+3. **Écoute par délégation.** Les lignes d'ingrédients et les lignes du tableau
+   sont recréées en permanence : les écouteurs sont posés sur les conteneurs
+   (`#calcLignes`, `#calcCorps`), jamais sur les champs eux-mêmes, qui
+   disparaîtraient avec leur écouteur au premier ajout de ligne.
+
+Et un piège d'interface : **on ne redessine pas les lignes pendant la frappe**,
+seulement à l'ajout ou au retrait d'une ligne. Refaire le HTML à chaque touche
+ferait perdre le curseur du champ en cours de saisie.
+
+### Vérification
+Chrome headless (`--dump-dom`), sur une copie d'`index.html` où sont injectés un
+`localStorage` en mémoire (file:// le refuse) et un piège à erreurs JS.
+
+- **51/51** sur la calculette : le calcul, la taxe, les saisies bancales (champ
+  vide, texte, virgule décimale — aucun `NaN`), les quatre verdicts, la saisie
+  dans la page, l'enregistrement, les quatre tris, modifier sans créer de
+  doublon, supprimer, l'échappement d'un nom piégé (`<img onerror=…>`), le refus
+  d'une fiche vide, et le fait qu'il reste toujours au moins une ligne.
+- Parmi eux, **quatre contrôles rejouent l'exemple du guide DAIGO** (épée de
+  boisaille) taxe à 0 : 40,7 % de marge, 349,7 ventes/jour, 384 633 k/jour,
+  indice 14 246. Les mêmes chiffres que ceux vérifiés le 30 août.
+- **Non-régression** : 0 erreur JS au chargement, `lancerTestsXp()` → 36/36, les
+  six onglets d'origine basculent toujours, 7 phases / 8 blocs de paliers /
+  5 socles toujours rendus.
+
+Un détail à savoir si un test échoue sur deux textes qui *semblent* identiques :
+`toLocaleString("fr-FR")` sépare les milliers par une **espace insécable fine**
+(U+202F), pas par une espace ordinaire. Il faut normaliser avant de comparer.
+
+## 15 septembre 2026 (suite) — la calculette va chercher les recettes du jeu
+
+La première version de l'onglet 🧮 était 100 % manuelle : il fallait retaper le nom
+de chaque ingrédient et sa quantité. Elle sait maintenant **chercher n'importe quel
+craft du jeu et poser sa recette toute seule** ; il ne reste que les prix à saisir.
+
+### Le chemin retenu, et pourquoi les autres ont été écartés
+
+L'API DofusDB ne propose pas de « chercher une recette par nom » utilisable tel quel.
+Quatre relevés au curl ont tranché :
+
+1. **`/recipes?resultName.fr[$search]=…` marche mais est accent-sensible.**
+   « Épée » → 33 résultats, « epee » → **0**. Inutilisable : personne ne tape les
+   accents dans un champ de recherche, encore moins sur un téléphone.
+2. **`$regex` est refusé** par le serveur (`Invalid query parameter $options`).
+3. **`/items?slug.fr[$search]=…` est accent-insensible** — « epee » → 99 items — et
+   accepte les **préfixes** (« bouf » → 259, « bouftou » → 149). C'est la bonne porte
+   d'entrée : on cherche sur le slug, pas sur le nom.
+4. **La recherche ne prend qu'UN mot.** « epee boisaille » → 0, « boisaille » → 8.
+   L'outil envoie donc le **mot le plus long** de la saisie (le plus discriminant) et
+   filtre les autres mots lui-même, sur le nom désaccentué.
+
+### Le point qui décide de tout : `recipeSlots`
+
+Savoir si un objet est craftable sans interroger `/recipes` pour chaque candidat était
+indispensable : **la route `/recipes` renvoie ~15 Ko par recette et `$select` n'y change
+rien** (le serveur ajoute d'office l'objet `result` complet). 50 recettes = 786 Ko.
+
+Les items, eux, portent `recipeSlots`. Vérifié dans les deux sens sur un lot de 50 :
+les 17 items à `recipeSlots > 0` ont tous une recette, les items à 0 n'en ont aucune.
+Les ressources brutes (Bois de Frêne, Plume Chimérique) sont à 0, l'Épée de Boisaille
+à 2 — son nombre d'ingrédients.
+
+Conséquence : **une seule requête légère pour chercher** (`/items` avec `$select`,
+15 Ko au lieu de 460 Ko), et **une seule requête lourde au clic**, pour la recette
+réellement demandée.
+
+⚠️ **`img` est un champ calculé à partir de `iconId`.** Si `iconId` n'est pas dans le
+`$select`, l'API renvoie `.../items/undefined.png` sans prévenir. Les deux vont ensemble.
+
+### Deux sortes de lignes d'ingrédient
+- **Ligne venue du jeu** (elle porte l'`id` DofusDB) : nom et quantité sont affichés en
+  texte, pas en champ — ce sont ceux de la recette officielle, les retoucher n'aurait
+  pas de sens. Seul le **prix** se saisit. Liseré violet à gauche.
+- **Ligne manuelle** (pas d'`id`) : tout reste modifiable, comme avant.
+
+### Le carnet de prix redevient commun
+Un craft venu du jeu a un identifiant : son prix de vente, son volume de ventes et le
+prix de chacun de ses ingrédients **rejoignent `dofus_prix` / `dofus_ventes`**, le carnet
+que lit l'onglet ⚒️ Recettes & rentabilité. Ils y sont relus au prochain chargement du
+même craft. Une fiche tapée à la main n'a pas d'identifiant : elle ne peut donc **rien**
+y écraser — c'était la raison du carnet séparé, elle tient toujours pour ce cas-là.
+
+### Les courses de requêtes
+Taper vite lance plusieurs recherches. Une réponse partie tôt peut revenir **après** une
+plus récente et écraser ses résultats. Chaque recherche porte un numéro
+(`calcNumeroRecherche`) ; seule la dernière a le droit d'écrire à l'écran. Un test le
+vérifie en retardant volontairement une réponse de 700 ms.
+
+### Vérification
+- **34/34** sur la recherche, contre une **fausse API** calquée sur les réponses réelles
+  relevées au curl : filtrage des ressources brutes, tri par niveau, accents, recherche
+  multi-mots (un seul appel, le bon pivot), remplissage de la calculette, lignes
+  verrouillées, partage du carnet dans les deux sens, fiche manuelle qui n'écrase rien,
+  recette sans ingrédient, objet sans recette, temporisation de la frappe, réponse en
+  retard ignorée, identité conservée dans le tableau comparatif.
+- **Essai contre la vraie API** : « epee boisaille » → Épée de Boisaille, « gelano » →
+  Gelano (niv 60), « amulette bouftou » → 2 résultats. Le Gelano s'ouvre avec ses
+  8 gelées et leurs quantités réelles (50 / 50 / 50 / 20 / 2 / 2 / 2 / 2).
+- **Non-régression** : 51/51 sur la calculette manuelle, `lancerTestsXp()` 36/36,
+  0 erreur JS, les six onglets d'origine intacts.
+
+### Piste non faite
+`chargerObjets()` interroge `/items` **sans `$select`** : ~460 Ko par lot de 50 là où
+15 Ko suffiraient. La fonction est partagée par trois onglets, la changer accélérerait
+tout l'outil. Non fait ici pour ne pas mélanger avec cette feature.
+
+## 15 septembre 2026 (3) — recentrage sur deux onglets, sauvegarde continue, « où ça sert »
+
+### Cinq onglets mis de côté — sans rien supprimer
+Seuls 🧮 Ma calculette et 🛠️ Mes métiers sont affichés. Les cinq autres **n'ont pas été
+retirés** : leurs sections, leurs données et leur code tournent exactement comme avant,
+seul leur bouton est masqué.
+
+Tout tient dans une constante en haut de la section « LES ONGLETS » d'`app.js` :
+
+```js
+const ONGLETS_VISIBLES = ["calculette", "metiers"];
+```
+
+`brancherOnglets()` masque les boutons absents de cette liste, et `activerOnglet()` refuse
+un onglet masqué en retombant sur le premier visible — sinon un `activerOnglet("plan")`
+oublié quelque part afficherait une vue sans bouton pour en sortir. Le dernier onglet
+mémorisé (`dofus_onglet`) passe par le même garde-fou : quelqu'un qui avait quitté l'outil
+sur « Feuille de route » ne tombe pas sur une page morte.
+
+**Pour en remettre un en service : ajouter son nom dans cette liste. Rien d'autre.**
+La non-régression vérifie justement que les sept sections sont toujours construites.
+
+### La fiche en cours est enregistrée au fil de la frappe
+Jusqu'ici seuls le carnet de prix et le tableau comparatif survivaient à un rechargement :
+une fiche à moitié remplie était perdue. Elle est maintenant écrite dans
+`dofus_calc_brouillon` **depuis `rafraichirCalc()`** — le seul point de passage obligé de
+toutes les modifications de la fiche. Le poser là garantit qu'aucune saisie ne peut
+échapper à la sauvegarde ; le poser sur chaque écouteur aurait été une promesse à tenir
+à chaque ajout futur.
+
+`calcNormaliser()` remet d'aplomb ce qui est relu : une fiche d'une version antérieure,
+sans `resultId` ou sans tableau de lignes, ne doit pas casser la page au démarrage.
+
+### 🔗 « Où sert cet objet ? »
+Répond à : *je note le prix d'une Potion de Souvenir — dans quels crafts entre-t-elle, et
+lesquels valent le coup ?*
+
+Un 🔗 au bout de chaque ligne d'ingrédient venue du jeu, plus un lien sous le nom de
+l'objet fini (qui peut lui-même être l'ingrédient d'autre chose). Le panneau liste les
+crafts concernés avec, pour chacun, son coût d'après le carnet, son prix de vente et le
+bénéfice. Un clic ouvre ce craft dans la calculette.
+
+**La route de l'API :** `/recipes?ingredientIds[$in][]=<id>`. Elle renvoie `resultName`
+localisé, `resultLevel`, `ingredientIds` et `quantities` — tout ce qu'il faut pour chiffrer,
+en **une seule requête**, sans aller chercher les noms ailleurs. Vérifié sur la Potion de
+Souvenir (id 7652) : 8 recettes.
+
+**Deux honnêtetés dans l'affichage**, parce qu'un chiffre faux est pire que pas de chiffre :
+- un coût calculé alors que des prix d'ingrédients manquent au carnet est un **minimum** :
+  il s'affiche en orange, précédé de `≥`, et le bénéfice est annoncé « au mieux » ;
+- un craft dont le prix de vente est inconnu n'affiche **aucun bénéfice** (« prix de vente
+  à renseigner ») et passe en bas de la liste, plutôt que d'exhiber une marge de −100 %.
+
+Le tri est donc : d'abord ceux qu'on peut juger, puis les autres.
+
+Même garde-fou de course que la recherche (`calcNumeroUsages`), et le panneau se referme
+tout seul quand on change de fiche — il parlerait d'un objet qui n'est plus à l'écran.
+
+### Vérification
+- **59/59** sur la calculette, dont les nouveaux contrôles : 2 boutons visibles sur 7,
+  les 7 sections toujours présentes, un onglet masqué inatteignable même en appelant
+  `activerOnglet`, la fiche enregistrée à chaque frappe (nom, prix de vente, lignes), et
+  `calcNormaliser` face à une fiche abîmée.
+- **49/49** sur la recherche et « où ça sert » : les crafts listés, celui sans prix de
+  vente relégué en bas, le coût repris du carnet, le `≥` sur un coût incomplet, le clic
+  qui ouvre le craft, le panneau qui se referme, le 🔗 absent des lignes manuelles, un
+  objet qui n'entre dans aucune recette.
+- **Essai réel** sur la Potion de Souvenir : 8 crafts listés, Substrat de Fascine en tête
+  (+41 400 k, 63,7 %), les cinq sans prix de vente relégués en bas.
+- **Non-régression** : `lancerTestsXp()` 36/36, 0 erreur JS, 7 sections construites,
+  7 phases / 8 blocs de paliers / 5 socles toujours rendus.
+
+## 15 septembre 2026 (4) — la recherche cachait la moitié du jeu
+
+**Symptôme :** « je ne trouve pas la Potion de Vieillesse ». L'objet existe pourtant
+(id 17060, niveau 95, `recipeSlots` 2) et aurait dû passer tous les filtres.
+
+### Trois défauts cumulés
+
+1. **Une seule page de 50 objets.** `slug.fr[$search]=potion` correspond à **315 objets**.
+   On n'en téléchargeait que les 50 premiers, dans l'ordre de l'API — et la Potion de
+   Vieillesse n'y était pas. Aucun message : elle semblait ne pas exister.
+2. **Le tri des craftables se faisait côté navigateur.** Sur ces 50 objets, la plupart
+   étaient des ressources brutes écartées ensuite : on payait 50 objets pour en garder
+   une poignée, et on ratait les crafts situés plus loin.
+3. **La liste était coupée à 15 en silence.** Même en trouvant l'objet, il pouvait être
+   tronqué sans que rien ne le signale.
+
+Et un quatrième, plus discret : **le tri se faisait par niveau**. Sur une recherche
+« potion », vingt potions de niveau 1 passaient devant celle de niveau 95.
+
+### Ce qui a changé
+
+- **`recipeSlots[$gt]=0` dans la requête.** Le serveur ne renvoie plus que des objets
+  craftables : « potion » passe de 315 objets à **114 crafts**. Chaque objet téléchargé
+  est désormais un candidat réel.
+- **Pagination** jusqu'à 4 pages de 50 (`CALC_PAGES_MAX`), soit 200 crafts examinés. Les
+  114 « potion » tiennent donc largement : on les voit tous.
+- **Tri par pertinence** (`scorePertinence`) avant le niveau : nom exact (0), nom qui
+  commence par la saisie (1), mots qui débutent les mots du nom (2) — « pot vieil » trouve
+  « Potion de Vieillesse » —, simple présence ailleurs (3). Le découpage des mots est fait
+  à la main plutôt qu'avec une expression régulière : la saisie peut contenir des
+  caractères qui y auraient un sens (`(`, `*`…).
+- **La liste dit ce qu'elle ne montre pas.** `chercherCraftsDuJeu` renvoie maintenant
+  `{ total, examines, retenus, affiches }` au lieu d'un simple tableau, et l'affichage en
+  tire : « **114 crafts** correspondent — voici les 25 plus proches de ce que tu as tapé.
+  Ajoute un mot pour préciser. » Une liste complète n'affiche aucun avertissement.
+- Plafond d'affichage porté de 15 à 25, la liste défilant dans sa boîte pour ne pas
+  repousser la calculette hors de l'écran.
+
+### Résultat mesuré sur la vraie API
+| Saisie | total API | examinés | retenus | Potion de Vieillesse |
+|---|---|---|---|---|
+| `potion` | 114 | 114 | 114 | absente des 25, **mais annoncé** |
+| `vieillesse` | 1 | 1 | 1 | position 1 |
+| `potion de vieillesse` | 1 | 1 | 1 | position 1 |
+| `pot vieil` | 2 | 2 | 1 | position 1 |
+
+### La leçon
+Le filtre était bon, la recherche était bonne — c'est la **fenêtre** qui était trop
+petite, et surtout **muette**. Un résultat manquant sans explication se lit comme une
+absence de l'objet : tout affichage tronqué doit dire qu'il l'est.
+
+### Vérification
+**65/65** sur la recherche et « où ça sert ». Les nouveaux contrôles reproduisent le bug
+exact : une fausse API de 120 crafts « potion » avec celui qu'on cherche en 118ᵉ position.
+Sont vérifiés : les 3 pages parcourues, les `$skip` successifs (0, 50, 100), le filtre
+serveur bien présent dans l'URL, les 4 niveaux de pertinence, une saisie contenant un
+caractère spécial, l'avertissement de troncature, et son absence quand tout est affiché.
+Plus : 59/59 sur la calculette, `lancerTestsXp()` 36/36, 0 erreur JS.
+
+## 15 septembre 2026 (5) — l'onglet 🚀 Craft ou brisage
+
+Troisième onglet en service. Il part des niveaux de 🛠️ Mes métiers, liste tout ce
+qui est fabricable, et met en regard : coût du craft (carnet), prix de vente
+(carnet), **valeur de brisage** (runes × prix de mes runes), et le verdict —
+vendre ou briser, avec ou sans focus.
+
+Point de conception qui a décidé du reste : **le brisage ne dépend d'aucun prix
+d'ingrédient.** Il ne tient qu'aux statistiques de l'objet et au prix des runes.
+L'onglet est donc utile dès le premier jour, carnet vide ; la colonne « craft »
+se remplit ensuite.
+
+### Ce que la recherche a établi — et ce qu'elle a écarté
+
+**La licence de l'API a changé.** `api.dofusdb.fr` sert désormais la
+**LPNC-IA 1.0**. Deux clauses comptent : attribution obligatoire (déjà en place,
+en README et en pied de page) et, clause 4.2, exclusion du champ de la licence
+de tout projet produit « en majorité » par une IA, l'appréciation étant laissée
+à la bonne foi de l'utilisateur. Signalé à l'auteur du projet ; décision la
+sienne.
+
+**Les poids : authentiques.** `effectPowerRate` sur `/effects` EST la table des
+poids de brisage. Recoupée point par point avec celle de la communauté :
+Vitalité 0,2 · Pods 0,25 · Initiative 0,1 · Force/Intel/Chance/Agilité 1 ·
+Puissance 2 · Sagesse et Prospection 3 · Dommages 20 · Portée 51 · PM 90 · PA 100.
+⚠️ Ce sont des **décimaux**, stockés en flottant 32 bits : la Vitalité revient en
+`0.20000000298023224`. Arrondi à la réception — une lecture entière l'aurait
+écrasée à 0, et la Vitalité est la stat la plus répandue du jeu. (Un premier
+diagnostic a d'ailleurs conclu à tort qu'elle valait 0 : le `grep` coupait au
+point décimal.)
+
+**La correspondance rune ↔ caractéristique : lue, pas devinée.** Chaque rune est
+un objet du jeu qui **porte l'`effectId`** de sa caractéristique. Rune Ga Pa →
+111 (PA), Rune Ré Per Feu → 213 (% Résistance Feu). Aucune abréviation n'est
+interprétée : « Ga », « Ré Per », « Pme » auraient toutes demandé de deviner.
+Les paliers `Rune Pa X` / `Rune Ra X` sont écartés (ils se fusionnent, ne se
+brisent pas), et une rune sans poids connu aussi.
+
+**L'import des prix Dofocus : impossible, et on n'insiste pas.** Leur front
+appelle `dofocus.fr/api/servers`, `/api/runes`, `/api/runes/{serveur}/prices` —
+routes trouvées dans leur bundle. Toutes répondent **« Accès refusé. »** à une
+requête extérieure, y compris avec un User-Agent de navigateur ordinaire. C'est
+un contrôle d'accès délibéré de leur auteur : le contourner (usurper Origin ou
+Referer) n'était pas envisageable. Aucun en-tête CORS non plus, donc un
+navigateur serait bloqué de toute façon. → **Table de prix vide, saisie à la
+main, enregistrée dans le navigateur.** Une rune sans prix est ignorée et les
+totaux sont annoncés comme des minimums.
+
+**Il n'existe pas de « taux de brisage par objet ».** Le coefficient est propre
+au serveur et varie en permanence selon le volume brisé récemment (1 % à 4000 %).
+C'est un réglage utilisateur, pas une donnée à récupérer. Dit explicitement dans
+l'interface.
+
+**La formule : sourcée, mais incertaine.** Retenue :
+`poids de ligne = (valeur × poids de la rune × niveau × 0,015) + 1`, puis
+`runes = poids × coefficient/100 ÷ poids de la rune`. Le focus suit la règle de
+DoFocus : la caractéristique ciblée rend 100 %, les autres 50 %, et tout devient
+de la rune ciblée. Un calculateur de référence mesure lui-même « un résultat faux
+34 fois sur 200, erreur max 7 % ». Le projet s'étant déjà fait avoir par une
+formule d'XP reconstituée de mémoire (fausse d'un facteur six), la règle tenue
+ici est : formule **isolée dans `brisage.js`**, sources citées en tête,
+incertitude affichée dans l'interface, et recalibrage prévu si un brisage réel
+diverge.
+
+### Trois autres choses réglées au passage
+- **Un craft rangé dans le tableau suivait plus les prix.** Il gardait une photo
+  du moment de l'enregistrement : corriger le prix d'un ingrédient ailleurs ne le
+  mettait pas à jour. `craftAJour()` relit désormais le carnet pour toute ligne
+  portant un identifiant DofusDB. Une fiche tapée à la main garde ses valeurs :
+  elle n'a rien à relire.
+- **Une icône** accompagne chaque craft du tableau comparatif (emoji neutre pour
+  une fiche manuelle, qui n'en a pas).
+- **Le référentiel de brisage est versionné** (`VERSION_REF_BRISAGE`) : changer
+  sa forme suffit à ce que les navigateurs le retéléchargent seuls.
+
+### Vérification
+**222 contrôles**, tous au vert :
+- **57** sur le brisage, dont 12 contre la **vraie API** (poids chargés, Vitalité
+  qui garde sa décimale, Rune Fo et Rune Ga Pa trouvées, paliers Pa/Ra écartés,
+  cache versionné) et 33 sur les formules pures : poids de ligne, conversion en
+  runes avec la chance de rune supplémentaire, effet du coefficient, focus dans
+  les deux sens, prix manquants signalés, choix du meilleur mode, jets min/moy/max.
+- **70** sur la recherche et « où ça sert », dont les nouveaux sur `craftAJour`.
+- **59** sur la calculette · `lancerTestsXp()` **36/36** · **0 erreur JS**.
+- Essai réel : Bijoutier 60, coefficient 250 % — 30 runes listées, verdicts et
+  focus calculés sur les vrais objets du jeu.
+
+### Piste laissée ouverte
+Le calcul charge les statistiques de tous les objets à portée (≈ 2,6 Ko par
+objet). Sur un compte à 19 métiers montés, ça peut faire lourd. Si ça devient
+gênant : ne charger les stats que des N premiers, ou filtrer par niveau minimum.
