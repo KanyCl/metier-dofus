@@ -707,3 +707,112 @@ diverge.
 Le calcul charge les statistiques de tous les objets à portée (≈ 2,6 Ko par
 objet). Sur un compte à 19 métiers montés, ça peut faire lourd. Si ça devient
 gênant : ne charger les stats que des N premiers, ou filtrer par niveau minimum.
+
+## 15 septembre 2026 (6) — le brisage recalé sur DoFocus
+
+L'entrée précédente annonçait la formule de brisage comme « sourcée, mais
+incertaine », avec recalibrage prévu. C'est fait — et elle était fausse.
+
+### Comment on a eu la formule
+L'API de DoFocus reste fermée (`/api/runes`, `/api/servers` : **403 « Accès
+refusé. »**, vérifié à nouveau). On n'a pas cherché à la contourner. Mais leur
+**front est public**, comme celui de n'importe quel site : `dofocus.fr` sert
+`/assets/index-*.js`, et le calcul y est en clair. Relevé tel quel :
+
+```js
+Pe = (jet, W, L, V) => jet < 0 ? 3*jet/(200*V) + 1
+                               : 3*jet*W*L/(200*V) + 1
+runes sans focus = Pe × coefficient/100 / W
+runes avec focus = [ Pe(cible) + ½·Σ Pe(autres) ] × coefficient/100 / W(cible)
+```
+
+`W` est le **poids d'une rune**, `V` sa **valeur**. Et 3/200 = 0,015, le facteur
+que le projet portait déjà.
+
+### L'erreur : on confondait deux poids
+Une rune a deux nombres, pas un seul — le guide de DoFocus le dit noir sur blanc
+(« une Rune Vi a un poids de 1, une Rune Ini a un poids de 1 mais une valeur
+de 10 »). Nous n'en avions qu'un : `effectPowerRate`, le poids d'**un point**
+de caractéristique.
+
+Le poids de ligne, lui, était juste : comme `W = poids d'un point × V`, le
+`/V` de la formule s'annule et on retrouve exactement
+`jet × poids d'un point × niveau × 0,015 + 1`.
+
+C'est la **conversion en runes** qui était fausse : on divisait par le poids d'un
+point au lieu du poids d'une rune. On annonçait donc **V fois trop de runes** :
+
+| Rune | Valeur | On annonçait |
+|---|---|---|
+| Vitalité | 5 | **×5 trop** |
+| Initiative | 10 | ×10 trop |
+| Pods | 10 | ×10 trop |
+| les 27 autres | 1 | exact |
+
+La vitalité étant présente sur à peu près tous les équipements du jeu, **presque
+tous les objets étaient surévalués au brisage**. Les verdicts « brise plutôt que
+vendre » sortis avant cette date sont à rejouer.
+
+### La valeur d'une rune se lit, elle ne se devine pas
+Elle est sur la rune elle-même : `possibleEffects[0].diceNum`. Les paliers le
+confirment tout seuls (Pa = ×3, Ra = ×10) : Vi 5 → Pa Vi 15 → Ra Vi 50 ;
+Ini 10 → Pa Ini 30 → Ra Ini 100.
+
+Et le calcul recoupe **exactement** les deux seuls chiffres que DoFocus publie :
+Rune Vi → 0,2 × 5 = **1** ✅, Rune Ini → 0,1 × 10 = **1** ✅. Deux sources
+indépendantes qui tombent juste : c'est ce qui permet de dire que la
+reconstruction tient.
+
+### Les jets négatifs, qu'on ignorait complètement
+Un objet peut porter un malus (« −3 PA »). DoFocus lui applique une branche à
+part, qui **ignore le poids et le niveau**. Une caractéristique dont le minimum
+est négatif ne produit aucune rune et ne peut pas être ciblée par un focus, mais
+elle compte quand même dans le total d'un focus, à 50 % comme les autres.
+
+Elle y pèse très peu (autour de 1, contre des dizaines pour une ligne normale),
+et il faut un malus au-delà de **200·V/3** — environ −67 pour une rune de
+valeur 1 — pour qu'elle devienne négative et tire vraiment le total vers le bas.
+`brisage.js` sait maintenant le faire.
+
+⚠️ **Mais ça ne se déclenche pas encore**, et c'est documenté dans le code :
+DofusDB encode un malus comme un **effet distinct** (effet 168 = « −X PA », de
+poids −50) que **porte aucune rune**. Nos lignes de malus sont donc écartées
+avant d'atteindre la formule. Conséquence : nos totaux de focus restent
+légèrement optimistes sur les objets à malus. Il ne manque que la correspondance
+malus → rune, qu'on n'a pas voulu deviner.
+
+### Ce qui a changé dans les fichiers
+- `brisage.js` — `poidsDUneRune()` et `estMalus()` ajoutées ; `poidsDeLigne()`
+  prend la valeur de la rune et gère les jets négatifs ; la conversion divise
+  par le poids d'une rune. L'en-tête dit ce qui est sûr, ce qui ne l'est pas,
+  et ce qui était faux.
+- `app.js` — le référentiel stocke la valeur de chaque rune et le poids d'une
+  rune (`VERSION_REF_BRISAGE` **2 → 3** : les navigateurs le retéléchargent
+  seuls) ; `lignesDeBrisage()` transmet `valeurRune` et `jetMin` ; la grille des
+  prix affiche le poids d'une rune, pas celui d'un point.
+- `index.html` — l'encart d'honnêteté passe de trois certitudes à quatre, dit
+  l'erreur et sa correction, et cite DoFocus comme source de la formule.
+  Numéro de cache `2026-09-15e` → `2026-09-15f`.
+
+### Vérification
+**99 contrôles au vert**, dans Chrome headless (`--dump-dom`, ni Node ni Python
+sur le poste). Le principe : la formule de DoFocus est **retranscrite telle
+quelle dans le test**, et nos fonctions doivent lui rendre le même nombre, cas
+par cas — poids de ligne, jets positifs et négatifs, nombre de runes, focus dans
+les deux sens, coefficients de 1 % à 4000 %.
+
+Sont vérifiés en plus : les 8 poids de rune réels, l'ampleur exacte du bug
+corrigé (le rapport ancien/nouveau vaut bien 5, 10 et 1), deux cas chiffrés à la
+main, les malus (exclusion, refus comme cible, seuil de bascule), les saisies
+bancales (aucun `NaN`), l'arbitrage focus/sans focus et les runes sans prix.
+
+À côté : les 6 fichiers `.js` se chargent sans erreur, `lancerTestsXp()`
+**36/36**, **0 erreur JS**. Et le référentiel a été rejoué sur la **vraie API** :
+30 runes de base, poids et valeurs conformes au tableau ci-dessus.
+
+### Ce qui trancherait vraiment
+Tout ceci aligne l'outil sur la **référence du domaine**, pas sur le jeu : ça ne
+prouve pas la formule, ça supprime un écart connu. Un vrai brisage en jeu, noté
+avec l'objet, son niveau, ses jets et le coefficient du moment, resterait la
+seule mesure qui puisse départager — comme les vingt relevés qui ont sauvé le
+moteur d'XP.

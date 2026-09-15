@@ -7,7 +7,7 @@
     <!-- Le « ?v=… » force les navigateurs à retélécharger les fichiers après
          une mise à jour : sans lui, un iPhone peut garder l'ancien app.js en
          cache et afficher une page cassée. À CHANGER À CHAQUE PUBLICATION. -->
-    <link rel="stylesheet" href="style.css?v=2026-09-15e">
+    <link rel="stylesheet" href="style.css?v=2026-09-15f">
 </head>
 <body>
 
@@ -605,7 +605,7 @@
         <div class="bloc encart-attention">
             <h2>⚠️ Ce que vaut ce calcul</h2>
             <p class="explication">
-                Trois choses sont <strong>sûres</strong>, une ne l'est pas. Autant le dire.
+                Quatre choses sont <strong>sûres</strong>, une ne l'est pas. Autant le dire.
             </p>
             <ul class="liste-regles">
                 <li><strong>Les poids sont exacts.</strong> Ils viennent de l'API DofusDB
@@ -614,15 +614,25 @@
                 <li><strong>La correspondance rune ↔ caractéristique est exacte.</strong>
                     Chaque rune est un objet du jeu qui porte l'effet qu'elle représente.
                     Rien n'est déduit des abréviations de son nom.</li>
+                <li><strong>La valeur d'une rune est exacte.</strong> Une rune ne donne
+                    pas toujours un seul point : une <em>Rune Vi</em> vaut 5 vitalité,
+                    une <em>Rune Ini</em> et une <em>Rune Pod</em> en valent 10. C'est lu
+                    sur la rune elle-même. L'outil l'ignorait jusqu'au 15 septembre 2026
+                    et annonçait donc 5 à 10 fois trop de runes sur ces trois-là — la
+                    vitalité étant presque partout, presque tous les objets étaient
+                    surévalués. <strong>C'est corrigé.</strong></li>
                 <li><strong>La règle du focus est celle de DoFocus :</strong> la
                     caractéristique ciblée rend 100 %, les autres 50 %, et tout devient de
                     la rune ciblée. L'outil compare les deux et te dit laquelle gagne.</li>
-                <li><strong>La formule, elle, est une estimation.</strong> Ankama ne la
-                    publie pas. Celle utilisée est celle des calculateurs de la communauté
-                    — <code>(valeur × poids × niveau × 0,015) + 1</code>, puis conversion
-                    en runes. L'un d'eux mesure lui-même « un résultat faux 34 fois sur
-                    200, erreur max 7 % ». Prends les montants comme un ordre de grandeur
-                    pour <em>comparer</em> des objets entre eux, pas comme une promesse.</li>
+                <li><strong>La formule, elle, reste une estimation.</strong> Ankama ne la
+                    publie pas. Celle utilisée est désormais <strong>celle de DoFocus</strong>,
+                    relevée dans son code public — <code>(jet × poids × niveau × 0,015) + 1</code>,
+                    puis division par le poids <em>d'une rune</em>. DoFocus dit appliquer
+                    « la même formule que le jeu » sans le démontrer, et un autre
+                    calculateur de référence mesure sur lui-même « un résultat faux 34 fois
+                    sur 200, erreur max 7 % ». Prends les montants comme un ordre de
+                    grandeur pour <em>comparer</em> des objets entre eux, pas comme une
+                    promesse.</li>
                 <li><strong>Il n'existe pas de « taux de brisage par objet ».</strong> Le
                     coefficient est propre au serveur et bouge en permanence selon le
                     volume brisé. C'est un réglage, pas une donnée à récupérer.</li>
@@ -760,14 +770,14 @@
         </p>
     </footer>
 
-    <script src="xp.js?v=2026-09-15e"></script>
-    <script src="brisage.js?v=2026-09-15e"></script>
-    <script src="feuille-route.js?v=2026-09-15e"></script>
-    <script src="methode.js?v=2026-09-15e"></script>
-    <script src="recolte.js?v=2026-09-15e"></script>
-    <script src="app.js?v=2026-09-15e"></script>
+    <script src="xp.js?v=2026-09-15f"></script>
+    <script src="brisage.js?v=2026-09-15f"></script>
+    <script src="feuille-route.js?v=2026-09-15f"></script>
+    <script src="methode.js?v=2026-09-15f"></script>
+    <script src="recolte.js?v=2026-09-15f"></script>
+    <script src="app.js?v=2026-09-15f"></script>
     <!-- Contrôles du moteur d'XP : ne s'exécutent pas tout seuls.
          Tape lancerTestsXp() dans la console du navigateur (F12). -->
-    <script src="test-xp.js?v=2026-09-15e"></script>
+    <script src="test-xp.js?v=2026-09-15f"></script>
 </body>
 </html>

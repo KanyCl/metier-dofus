@@ -2681,8 +2681,10 @@ function modeDeJet() {
 
 /* À incrémenter dès que la FORME du référentiel change : un navigateur qui a
    gardé l'ancienne version la retélécharge alors tout seul, sans que personne
-   ait à vider son cache. (Version 2 : poids arrondis à la réception.) */
-const VERSION_REF_BRISAGE = 2;
+   ait à vider son cache. (Version 2 : poids arrondis à la réception.
+   Version 3 : chaque rune porte aussi sa VALEUR, indispensable au
+   calcul recalé sur DoFocus — voir l'en-tête de `brisage.js`.) */
+const VERSION_REF_BRISAGE = 3;
 
 async function chargerReferentielBrisage() {
     if (refBrisage && refBrisage.poids && refBrisage.runes
@@ -2714,7 +2716,14 @@ async function chargerReferentielBrisage() {
     /* Chaque rune est un objet du jeu qui PORTE l'effet qu'elle
        représente : Rune Ga Pa → effet 111 (PA), Rune Ré Per Feu →
        effet 213 (% Résistance Feu). La correspondance est donc lue
-       dans les données, jamais déduite des abréviations du nom. */
+       dans les données, jamais déduite des abréviations du nom.
+
+       La rune porte aussi sa VALEUR — le nombre de points qu'elle
+       donne : une Rune Vi vaut 5 vitalité, une Rune Ini 10 initiative,
+       une Rune Pod 10 pods, toutes les autres 1. C'est `diceNum` de
+       son propre effet. Sans cette valeur, la conversion d'un poids en
+       nombre de runes est fausse d'un facteur 5 ou 10 — c'est
+       exactement le bug que le recalage sur DoFocus a corrigé. */
     const runes = {};
     const d = await appelAPI("/items?slug.fr[$search]=rune&$limit=300&lang=fr"
         + "&$select[]=id&$select[]=name&$select[]=possibleEffects");
@@ -2727,7 +2736,12 @@ async function chargerReferentielBrisage() {
         if (!effet || effet.effectId == null) continue;
         // Sans poids connu, la rune ne peut pas entrer dans un calcul.
         if (!poids[effet.effectId]) continue;
-        runes[effet.effectId] = { id: o.id, nom };
+        const valeur = effet.diceNum > 0 ? effet.diceNum : 1;
+        runes[effet.effectId] = {
+            id: o.id, nom, valeur,
+            // Le poids d'UNE rune : c'est par lui qu'on divise.
+            poidsRune: Math.round(poids[effet.effectId] * valeur * 10000) / 10000
+        };
     }
 
     refBrisage = { version: VERSION_REF_BRISAGE,
@@ -2762,14 +2776,29 @@ async function chargerStatsObjets(ids) {
 function lignesDeBrisage(idObjet, niveau) {
     const mode = modeDeJet();
     return (statsObjets[idObjet] || [])
-        .map((e) => ({
-            effectId: e.effectId,
-            valeur: jetRetenu(e, mode),
-            poidsRune: refBrisage.poids[e.effectId] || 0,
-            niveau
-        }))
-        // Une caractéristique sans rune correspondante (dommages d'arme,
-        // effets de sort…) ne produit rien au brisage.
+        .map((e) => {
+            const rune = refBrisage.runes[e.effectId];
+            return {
+                effectId: e.effectId,
+                valeur: jetRetenu(e, mode),
+                // Le minimum de l'intervalle : c'est lui qui dit si la ligne
+                // est un malus, pas le jet retenu.
+                jetMin: e.diceNum || 0,
+                poidsRune: refBrisage.poids[e.effectId] || 0,
+                valeurRune: rune ? rune.valeur : 1,
+                niveau
+            };
+        })
+        /* Une caractéristique sans rune correspondante (dommages d'arme,
+           effets de sort…) ne produit rien au brisage.
+
+           ⚠️ Limite connue : les MALUS (« −3 PA ») portent chez DofusDB un
+           effectId à eux, distinct de celui du gain, et aucune rune ne les
+           porte — ils sont donc écartés ici et n'atteignent jamais le
+           calcul. DoFocus, lui, les compte en négatif dans le total d'un
+           focus. Nos totaux de focus sont donc légèrement optimistes sur
+           les objets qui portent un malus. `brisage.js` sait déjà les
+           traiter : il ne manque que la correspondance malus → rune. */
         .filter((l) => l.valeur > 0 && l.poidsRune > 0 && refBrisage.runes[l.effectId]);
 }
 
@@ -2971,7 +3000,15 @@ function afficherPrixRunes() {
         return;
     }
     const entrees = Object.entries(refBrisage.runes)
-        .map(([effectId, r]) => ({ effectId, ...r, poids: refBrisage.poids[effectId] }))
+        /* On affiche le poids d'UNE RUNE, pas celui d'un point : c'est
+           celui qui compte dans le calcul, et c'est celui que donne la
+           référence du domaine (Rune Vi 1, Rune Ini 1, Rune Ga Pa 100). */
+        .map(([effectId, r]) => ({
+            effectId, ...r,
+            poids: r.poidsRune != null
+                ? r.poidsRune
+                : (refBrisage.poids[effectId] || 0) * (r.valeur || 1)
+        }))
         .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
 
     const remplies = entrees.filter((e) => prixRunes[e.effectId] > 0).length;
@@ -2985,7 +3022,8 @@ function afficherPrixRunes() {
             ${entrees.map((e) => `
                 <label class="rune-ligne${prixRunes[e.effectId] > 0 ? " rune-remplie" : ""}">
                     <span class="rune-nom">${echapper(e.nom)}</span>
-                    <span class="rune-poids" title="poids de brisage">${e.poids}</span>
+                    <span class="rune-poids"
+                          title="poids d'une rune${e.valeur > 1 ? ` — elle donne ${e.valeur} points` : ""}">${e.poids}</span>
                     <input type="number" min="0" step="1" class="prix-input"
                            data-prix-rune="${e.effectId}"
                            value="${prixRunes[e.effectId] || ""}" placeholder="0">
